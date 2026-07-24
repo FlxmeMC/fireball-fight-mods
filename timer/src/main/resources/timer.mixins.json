@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "package": "net.weavemc.mods.timer.mixin",
+  "mixins": [
+    "GuiScreenCommandMixin"
+  ]
+}

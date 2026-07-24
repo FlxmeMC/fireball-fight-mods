@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "package": "net.weavemc.mods.endstone.mixin",
+  "mixins": [
+    "BlockEndstoneRenderLayerMixin",
+    "BlockRendererDispatcherMixin",
+    "BlockShouldSideBeRenderedMixin",
+    "ChunkCacheAccessor",
+    "GuiScreenCommandMixin",
+    "RenderChunkRebuildMixin"
+  ]
+}
