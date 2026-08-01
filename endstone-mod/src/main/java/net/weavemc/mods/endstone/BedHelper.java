@@ -21,7 +21,7 @@ public final class BedHelper {
 
         for (EnumFacing facing : EnumFacing.values()) {
             IBlockState neighbor = getBlockStateSafely(world, pos.offset(facing));
-            if (neighbor != null && neighbor.getBlock() instanceof BlockBed) {
+            if (isBedState(neighbor)) {
                 return true;
             }
         }
@@ -50,11 +50,23 @@ public final class BedHelper {
         for (int[] offset : offsets) {
             IBlockState state = getBlockStateSafely(
                     world, pos.add(offset[0], offset[1], offset[2]));
-            if (state != null && state.getBlock() instanceof BlockBed) {
+            if (isBedState(state)) {
                 return true;
             }
         }
         return false;
+    }
+
+    public static boolean isBedState(IBlockState state) {
+        return state != null && state.getBlock() instanceof BlockBed;
+    }
+
+    public static BlockPos getRenderUpdateMin(BlockPos bedPos) {
+        return bedPos.add(-GLASS_RADIUS, -GLASS_RADIUS, -GLASS_RADIUS);
+    }
+
+    public static BlockPos getRenderUpdateMax(BlockPos bedPos) {
+        return bedPos.add(GLASS_RADIUS, GLASS_RADIUS, GLASS_RADIUS);
     }
 
     private static int[][] createSearchOffsets(int radius) {

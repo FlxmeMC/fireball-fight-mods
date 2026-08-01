@@ -16,11 +16,29 @@ import net.weavemc.mods.endstone.command.EndstoneCommand;
 
 import java.lang.instrument.Instrumentation;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public final class EndstoneMod implements ModInitializer {
     private static final EndstoneCommand COMMAND = new EndstoneCommand();
     private static EndstoneConfigStore configStore;
     private KeyBinding toggleKey;
+
+    static boolean verifyEnabledPersistence() throws IOException {
+        Path directory = Files.createTempDirectory("weave-endstone-persistence-");
+        Path file = directory.resolve("endstone.properties");
+        try {
+            EndstoneConfigStore store = new EndstoneConfigStore(file);
+            store.saveEnabled(true);
+            boolean enabledReloaded = new EndstoneConfigStore(file).loadEnabled();
+            store.saveEnabled(false);
+            boolean disabledReloaded = !new EndstoneConfigStore(file).loadEnabled();
+            return enabledReloaded && disabledReloaded;
+        } finally {
+            Files.deleteIfExists(file);
+            Files.deleteIfExists(directory);
+        }
+    }
 
     @Override
     public void preInit(Instrumentation instrumentation) {

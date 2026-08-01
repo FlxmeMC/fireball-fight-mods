@@ -9,6 +9,7 @@
     "BlockShouldSideBeRenderedMixin",
     "ChunkCacheAccessor",
     "GuiScreenCommandMixin",
-    "RenderChunkRebuildMixin"
+    "RenderChunkRebuildMixin",
+    "WorldClientBedUpdateMixin"
   ]
 }

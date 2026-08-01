@@ -128,7 +128,7 @@ public final class EndstoneFeature {
     }
 
     public static boolean shouldUseGlassRenderLayer(Block block) {
-        return enabled && isEndStoneBlock(block);
+        return shouldTreatAsGlassAtChunkPos(block);
     }
 
     public static boolean shouldTreatAsGlassAtChunkPos(Block block) {

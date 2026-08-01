@@ -9,6 +9,7 @@ public final class TimerState {
     private long stoppedElapsedNanos;
     private boolean running;
     private boolean visible;
+    private boolean finishedMatch;
 
     public TimerState() {
         this(System::nanoTime);
@@ -36,6 +37,16 @@ public final class TimerState {
         stoppedElapsedNanos = 0L;
         running = true;
         visible = true;
+        finishedMatch = false;
+    }
+
+    /** Freezes the current value while keeping it visible. */
+    public synchronized void finish() {
+        if (running) {
+            stoppedElapsedNanos = elapsedNanos(nanoClock.getAsLong());
+            running = false;
+        }
+        finishedMatch = visible;
     }
 
     public synchronized void reset() {
@@ -43,6 +54,7 @@ public final class TimerState {
         stoppedElapsedNanos = 0L;
         running = false;
         visible = false;
+        finishedMatch = false;
     }
 
     public synchronized boolean isRunning() {
@@ -51,6 +63,10 @@ public final class TimerState {
 
     public synchronized boolean isVisible() {
         return visible;
+    }
+
+    public synchronized boolean isFinishedMatch() {
+        return finishedMatch;
     }
 
     public synchronized long elapsedMillis() {

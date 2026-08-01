@@ -2,6 +2,7 @@ package net.weavemc.mods.timer;
 
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C01PacketChatMessage;
+import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.weavemc.api.ModInitializer;
 import net.weavemc.api.command.CommandBus;
 import net.weavemc.api.event.ChatEvent;
@@ -18,6 +19,22 @@ public final class TimerMod implements ModInitializer {
     private TimerConfig config;
     private TimerRenderer renderer;
     private static TimerCommand command;
+
+    static boolean verifyServerMessageSecurity() {
+        return MatchLifecycleParser.parse("Match started!") == MatchLifecycleParser.Signal.START
+                && MatchLifecycleParser.parse("Match Results (Click to view)")
+                        == MatchLifecycleParser.Signal.END
+                && MatchLifecycleParser.parse("Opponent forfeited.")
+                        == MatchLifecycleParser.Signal.END
+                && MatchLifecycleParser.parse("Opponent disconnected.")
+                        == MatchLifecycleParser.Signal.END
+                && MatchLifecycleParser.parse("[xFlxme] Match started!")
+                        == MatchLifecycleParser.Signal.NONE
+                && MatchLifecycleParser.parse("[Famous] xFlxme AURA: Match started!")
+                        == MatchLifecycleParser.Signal.NONE
+                && MatchLifecycleParser.parse("[xFlxme] Match Results (Click to view)")
+                        == MatchLifecycleParser.Signal.NONE;
+    }
 
     @Override
     public void init() {
@@ -58,6 +75,13 @@ public final class TimerMod implements ModInitializer {
     }
 
     @SubscribeEvent
+    public void onPacketReceive(PacketEvent.Receive event) {
+        if (state.isFinishedMatch() && event.getPacket() instanceof S08PacketPlayerPosLook) {
+            clear();
+        }
+    }
+
+    @SubscribeEvent
     public void onChat(ChatEvent.Received event) {
         if (event.getMessage() == null) {
             return;
@@ -67,7 +91,7 @@ public final class TimerMod implements ModInitializer {
         if (signal == MatchLifecycleParser.Signal.START) {
             state.startFresh();
         } else if (signal == MatchLifecycleParser.Signal.END) {
-            state.reset();
+            state.finish();
         }
     }
 
@@ -80,11 +104,15 @@ public final class TimerMod implements ModInitializer {
 
     @SubscribeEvent
     public void onWorldLoad(WorldEvent.Load event) {
-        state.reset();
+        clear();
     }
 
     @SubscribeEvent
     public void onWorldUnload(WorldEvent.Unload event) {
+        clear();
+    }
+
+    private void clear() {
         state.reset();
     }
 

@@ -3,6 +3,9 @@ package com.spawnprot.mod;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -316,4 +319,24 @@ public final class SpawnProtState {
         }
     }
 
+    static boolean verifyEnabledPersistence() throws IOException {
+        Path directory = Files.createTempDirectory("weave-spawnprot-persistence-");
+        Path file = directory.resolve("config.properties");
+        try {
+            loadConfig(directory.toFile());
+            setEnabled(false);
+            saveConfig();
+            setEnabled(true);
+            loadConfig(directory.toFile());
+            boolean disabledReloaded = !isEnabled();
+            setEnabled(true);
+            saveConfig();
+            setEnabled(false);
+            loadConfig(directory.toFile());
+            return disabledReloaded && isEnabled();
+        } finally {
+            Files.deleteIfExists(file);
+            Files.deleteIfExists(directory);
+        }
+    }
 }

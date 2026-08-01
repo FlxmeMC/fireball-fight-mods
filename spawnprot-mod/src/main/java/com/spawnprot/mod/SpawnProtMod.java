@@ -26,11 +26,30 @@ import net.weavemc.api.event.TickEvent;
 import net.weavemc.api.event.WorldEvent;
 import net.weavemc.mods.hudeditor.HudElementRegistry;
 
+import java.io.IOException;
+
 public final class SpawnProtMod implements ModInitializer {
     private final DeathChatHandler deathChatHandler = new DeathChatHandler();
     private final TitlePacketHandler titlePacketHandler = new TitlePacketHandler();
     private final SpawnProtRenderer renderer = new SpawnProtRenderer();
     private KeyBinding toggleKey;
+
+    static boolean verifyServerMessageSecurity() {
+        return "xFlxme".equals(DeathChatHandler.serverDeathPlayer(
+                "xFlxme was hit into the void by Skablonk!", "Skablonk"))
+                && DeathChatHandler.serverDeathPlayer(
+                        "[xFlxme] Alex died!", "xFlxme") == null
+                && DeathChatHandler.serverDeathPlayer(
+                        "[Famous] xFlxme AURA: Alex died!", "xFlxme") == null
+                && DeathChatHandler.serverDeathPlayer(
+                        "Alex: Steve died!", "xFlxme") == null
+                && DeathChatHandler.serverDeathPlayer(
+                        "Alex died! nice try", "xFlxme") == null;
+    }
+
+    static boolean verifyEnabledPersistence() throws IOException {
+        return SpawnProtState.verifyEnabledPersistence();
+    }
 
     @Override
     public void init() {

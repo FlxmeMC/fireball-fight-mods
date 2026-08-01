@@ -27,6 +27,7 @@ dependencies {
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
     compileOnly("net.weavemc.mods:hud-editor:1.0.1")
+    testImplementation("junit:junit:4.13.2")
 }
 
 java {
@@ -36,4 +37,8 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+}
+
+tasks.test {
+    useJUnit()
 }

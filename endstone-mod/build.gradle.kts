@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.weavemc.mods.endstone"
-version = "1.0.0"
+version = "1.0.1"
 
 weave {
     configure {
@@ -28,7 +28,17 @@ repositories {
 dependencies {
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
+
     compileOnly("org.spongepowered:mixin:0.8.5")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:3.12.4")
+    testImplementation(files(".gradle/weave/client-mcp-named.jar"))
+    testRuntimeOnly("com.google.guava:guava:17.0")
+    testRuntimeOnly("org.apache.commons:commons-lang3:3.3.2")
+    testRuntimeOnly("com.google.code.gson:gson:2.2.4")
+    testRuntimeOnly("org.apache.logging.log4j:log4j-api:2.0-beta9")
+    testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.0-beta9")
 }
 
 java {
@@ -38,4 +48,8 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+}
+
+tasks.test {
+    useJUnit()
 }
