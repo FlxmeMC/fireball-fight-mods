@@ -23,7 +23,14 @@ final class ManifestClient {
     private static final String PUBLIC_KEY_BASE64 =
             "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJlZO55XlPtE2Xeep98/x2os+oAxVJp8h1TCyPKhtjunOKARADgJ630kmIgLJdXs84dJae2FAl8CR6hvvjVrkMw==";
 
+    static boolean isLocalMode() {
+        return System.getProperty("weave.localManifest") != null;
+    }
+
     ReleaseManifest fetch() throws Exception {
+        if (isLocalMode()) {
+            return LocalRelease.load(java.nio.file.Paths.get(System.getProperty("weave.localManifest")));
+        }
         byte[] manifestBytes = download(MANIFEST_URL, 15_000, 30_000);
         byte[] signatureBytes = Base64.getDecoder().decode(
                 new String(download(SIGNATURE_URL, 15_000, 30_000),

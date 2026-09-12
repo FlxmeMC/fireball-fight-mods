@@ -1,5 +1,7 @@
 package net.weavemc.mods.timer;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.weavemc.api.command.Command;
 
 final class TimerCommand extends Command {
@@ -12,8 +14,11 @@ final class TimerCommand extends Command {
 
     @Override
     public void execute(String[] args) {
+        if (!ServerContext.isAllowed()) { ServerContext.explainDisabled(); return; }
         if (args.length == 1) {
-            state.toggle();
+            ServerContext.runOnClientThread(new Runnable() {
+                @Override public void run() { state.toggle(); }
+            });
         }
     }
 }

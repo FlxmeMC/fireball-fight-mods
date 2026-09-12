@@ -1,5 +1,7 @@
 package net.weavemc.mods.endstone;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -83,7 +85,7 @@ public final class EndstoneFeature {
     }
 
     public static boolean shouldTreatAsGlass(IBlockAccess world, BlockPos pos) {
-        if (!enabled || world == null || pos == null) {
+        if (!enabled || !ServerContext.isAllowed() || world == null || pos == null) {
             return false;
         }
 
@@ -128,7 +130,16 @@ public final class EndstoneFeature {
     }
 
     public static boolean shouldUseGlassRenderLayer(Block block) {
-        return shouldTreatAsGlassAtChunkPos(block);
+        CompileContext context = CHUNK_CONTEXT.get();
+        if (context == null) {
+            // Lunar/OptiFine chunk builders bypass the vanilla rebuildChunk
+            // hooks, so no compile position is ever captured there. Keep every
+            // endstone on the cutout layer and let the per-position model swap
+            // decide; answering SOLID would bake the swapped glass model into
+            // a pass without alpha testing and render it opaque.
+            return enabled && ServerContext.isAllowed() && isEndStoneBlock(block);
+        }
+        return shouldTreatAsGlassInContext(block, context);
     }
 
     public static boolean shouldTreatAsGlassAtChunkPos(Block block) {

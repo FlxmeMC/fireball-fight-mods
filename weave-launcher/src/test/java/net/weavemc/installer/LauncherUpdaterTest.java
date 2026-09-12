@@ -9,7 +9,8 @@ public final class LauncherUpdaterTest {
     @Test
     public void detectsOnlyStrictlyNewerLauncherVersions() {
         ReleaseManifest manifest = new ReleaseManifest();
-        manifest.installerVersion = "1.0.10";
+        String[] current = Main.VERSION.split("\\.");
+        manifest.installerVersion = current[0] + "." + current[1] + "." + (Integer.parseInt(current[2]) + 1);
         assertTrue(LauncherUpdater.isUpdateAvailable(manifest));
 
         manifest.installerVersion = Main.VERSION;

@@ -13,6 +13,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.JTextArea;
@@ -73,7 +74,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
     private boolean updatePromptShown;
 
     InstallerFrame() {
-        super("Fireball Fight Mods");
+        super(ManifestClient.isLocalMode() ? "Fireball Fight Mods - Local build" : "Fireball Fight Mods");
         installSettings = service.loadSettings();
         ImageIcon appIcon = loadInstallerIcon(32);
         if (appIcon.getIconWidth() > 0) {
@@ -81,7 +82,9 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
         }
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(720, 560));
-        setSize(840, 640);
+        setSize(1040, 860);
+        java.awt.Rectangle screen = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        setSize(Math.min(getWidth(), screen.width), Math.min(getHeight(), screen.height));
         setLocationRelativeTo(null);
         getContentPane().setBackground(CANVAS);
         setLayout(new BorderLayout());
@@ -132,7 +135,9 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                 creatorCredit.setIcon(new CreditIcon(12, MUTED));
             }
         });
-        JLabel subtitle = new JLabel("Download mods for completely free in seconds.");
+        JLabel subtitle = new JLabel(ManifestClient.isLocalMode()
+                ? "Local build"
+                : "Download mods for completely free in seconds.");
         subtitle.setForeground(MUTED);
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         JPanel subtitleRow = new JPanel();
@@ -262,7 +267,13 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
         section.setFont(new Font("Segoe UI", Font.BOLD, 14));
         area.add(section, BorderLayout.NORTH);
         modGrid.setOpaque(false);
-        area.add(modGrid, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(modGrid,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        area.add(scroll, BorderLayout.CENTER);
         return area;
     }
 
@@ -369,7 +380,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
 
     private void loadManifest() {
         setBusy(true);
-        update(8, "Verifying the latest release…");
+        update(8, ManifestClient.isLocalMode() ? "Checking local build artifacts..." : "Verifying the latest release...");
         new SwingWorker<ReleaseManifest, Void>() {
             @Override
             protected ReleaseManifest doInBackground() throws Exception {
@@ -382,12 +393,13 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                 try {
                     manifest = get();
                     showMods();
-                    update(0, service.isInstalled() ? "Ready to update your installation" : "Ready to install");
+                    update(0, manifest.localDirectory != null ? "Local build - ready to test"
+                            : service.isInstalled() ? "Ready to update your installation" : "Ready to install");
                     loaded = true;
                 } catch (Exception exception) {
                     manifest = null;
-                    update(0, service.isInstalled()
-                            ? "Release server unavailable · uninstall remains available"
+                    update(0, ManifestClient.isLocalMode() ? "Local build unavailable - rebuild with launch-local-app.ps1"
+                            : service.isInstalled() ? "Release server unavailable - uninstall remains available"
                             : "Could not reach the release server");
                     showError(rootMessage(exception));
                 } finally {
@@ -401,7 +413,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
     }
 
     private void promptForLauncherUpdate() {
-        if (updatePromptShown || !LauncherUpdater.isUpdateAvailable(manifest)) {
+        if (manifest.localDirectory != null || updatePromptShown || !LauncherUpdater.isUpdateAvailable(manifest)) {
             return;
         }
         updatePromptShown = true;
@@ -477,6 +489,8 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
             modGrid.add(card);
             modCards.put(mod.id, card);
         }
+        int rows = (modCards.size() + 1) / 2;
+        modGrid.setPreferredSize(new Dimension(800, rows * 156 + Math.max(0, rows - 1) * 12));
         modGrid.revalidate();
         modGrid.repaint();
     }
@@ -898,6 +912,8 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                 fileName = "spawnprot.png";
             } else if ("timer".equals(modId)) {
                 fileName = "timer.png";
+            } else if ("fireball-hitboxes".equals(modId)) {
+                fileName = "fireball.png";
             } else {
                 return new ImageIcon();
             }

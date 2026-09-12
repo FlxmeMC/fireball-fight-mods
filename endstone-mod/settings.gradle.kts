@@ -10,3 +10,9 @@ plugins {
 }
 
 rootProject.name = "endstone-mod"
+
+includeBuild("../server-context") {
+    dependencySubstitution {
+        substitute(module("net.weavemc.mods:server-context")).using(project(":"))
+    }
+}

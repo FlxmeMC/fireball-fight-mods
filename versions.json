@@ -1,0 +1,15 @@
+{
+  "appVersion": "1.0.8",
+  "installerVersion": "1.0.10",
+  "components": {
+    "loader": "1.0.0",
+    "blockhit-sound": "1.0.1",
+    "endstone-mod": "1.0.3",
+    "hud-editor": "1.0.1",
+    "spawnprot-mod": "1.0.2",
+    "timer": "1.1.1",
+    "weave-disclosure": "1.0.0",
+    "server-context": "1.0.1",
+    "fireball-hitboxes": "1.0.0"
+  }
+}

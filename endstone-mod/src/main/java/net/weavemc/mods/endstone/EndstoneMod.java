@@ -1,5 +1,7 @@
 package net.weavemc.mods.endstone;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.Packet;
@@ -23,6 +25,7 @@ public final class EndstoneMod implements ModInitializer {
     private static final EndstoneCommand COMMAND = new EndstoneCommand();
     private static EndstoneConfigStore configStore;
     private KeyBinding toggleKey;
+    private boolean wasActive;
 
     static boolean verifyEnabledPersistence() throws IOException {
         Path directory = Files.createTempDirectory("weave-endstone-persistence-");
@@ -61,6 +64,12 @@ public final class EndstoneMod implements ModInitializer {
 
     @SubscribeEvent
     public void onTick(TickEvent.Pre event) {
+        boolean active = ServerContext.isAllowed() && EndstoneFeature.isEnabled();
+        if (active != wasActive) {
+            wasActive = active;
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc != null && mc.theWorld != null && mc.renderGlobal != null) mc.renderGlobal.loadRenderers();
+        }
         if (toggleKey == null) {
             toggleKey = ModKeyBinding.tryRegister("Toggle Endstone Mod");
         }
@@ -73,6 +82,13 @@ public final class EndstoneMod implements ModInitializer {
     }
 
     public static void toggleFeature() {
+        if (!ServerContext.isAllowed()) { ServerContext.explainDisabled(); return; }
+        ServerContext.runOnClientThread(new Runnable() {
+            @Override public void run() { toggleAllowedFeature(); }
+        });
+    }
+
+    private static void toggleAllowedFeature() {
         boolean enabled = !EndstoneFeature.isEnabled();
         EndstoneFeature.setEnabled(enabled);
         saveEnabledState();

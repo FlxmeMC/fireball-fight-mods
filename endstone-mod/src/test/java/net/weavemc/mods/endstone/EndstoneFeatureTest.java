@@ -7,6 +7,9 @@ import net.minecraft.util.EnumWorldBlockLayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.IBlockAccess;
 import org.junit.After;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import net.weavemc.mods.servercontext.ServerContext;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -17,6 +20,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class EndstoneFeatureTest {
+    private MockedStatic<ServerContext> server;
     private static final BlockPos CENTER = new BlockPos(4, 64, 4);
     private static Block endStoneBlock;
     private static IBlockState endStoneState;
@@ -37,6 +41,8 @@ public class EndstoneFeatureTest {
 
     @Before
     public void setUp() {
+        server = Mockito.mockStatic(ServerContext.class);
+        server.when(ServerContext::isAllowed).thenReturn(true);
         EndstoneFeature.setEnabled(false);
         EndstoneFeature.setGlassMode(EndstoneFeature.MODE_RADIUS_5);
         EndstoneFeature.clearChunkCompileContext();
@@ -44,8 +50,19 @@ public class EndstoneFeatureTest {
 
     @After
     public void tearDown() {
+        server.close();
         EndstoneFeature.setEnabled(false);
         EndstoneFeature.clearChunkCompileContext();
+    }
+
+    @Test
+    public void enabledPreferenceDoesNotRenderGlassOutsideMinemen() {
+        server.when(ServerContext::isAllowed).thenReturn(false);
+        EndstoneFeature.setEnabled(true);
+        EndstoneFeature.setGlassMode(EndstoneFeature.MODE_ALWAYS);
+        Assert.assertFalse(EndstoneFeature.shouldTreatAsGlass(worldWithEndstoneAt(CENTER), CENTER));
+        Assert.assertFalse(EndstoneFeature.shouldUseGlassRenderLayer(endStoneBlock));
+        Assert.assertTrue(EndstoneFeature.isEnabled());
     }
 
     @Test
@@ -119,12 +136,13 @@ public class EndstoneFeatureTest {
     }
 
     @Test
-    public void missingCompileContextKeepsEndstoneInTheSolidPass() {
+    public void missingCompileContextFallsBackToCutoutForLunar() {
         EndstoneFeature.setEnabled(true);
 
         Assert.assertFalse(EndstoneFeature.shouldTreatAsGlassAtChunkPos(endStoneBlock));
+        Assert.assertTrue(EndstoneFeature.shouldUseGlassRenderLayer(endStoneBlock));
         Assert.assertEquals(
-                EnumWorldBlockLayer.SOLID,
+                EnumWorldBlockLayer.CUTOUT,
                 EndstoneFeature.resolveRenderLayer(endStoneBlock)
         );
     }
@@ -142,8 +160,7 @@ public class EndstoneFeatureTest {
     }
 
     @Test
-    public void enabledEndstoneNeedsACompilePositionToUseCutout() {
-        EndstoneFeature.setEnabled(true);
+    public void disabledFeatureKeepsEndstoneSolidWithoutContext() {
         EndstoneFeature.clearChunkCompileContext();
 
         Assert.assertFalse(EndstoneFeature.shouldUseGlassRenderLayer(endStoneBlock));

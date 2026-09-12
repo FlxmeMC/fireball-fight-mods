@@ -5,14 +5,14 @@ plugins {
 }
 
 group = "net.weavemc.mods.blockhitsound"
-version = "1.0.0"
+version = "1.0.1"
 
 weave {
     configure {
         name = "Blockhit Sound"
         modId = "blockhit-sound"
         entryPoints = listOf("net.weavemc.mods.blockhitsound.BlockhitSoundMod")
-        dependencies = listOf("minecraft", "java")
+        dependencies = listOf("minecraft", "java", "server-context")
         mcpMappings()
     }
     version("1.8.9")
@@ -24,6 +24,8 @@ repositories {
 }
 
 dependencies {
+    compileOnly("net.weavemc.mods:server-context:1.0.1")
+    testImplementation("net.weavemc.mods:server-context:1.0.1")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
     testImplementation("junit:junit:4.13.2")

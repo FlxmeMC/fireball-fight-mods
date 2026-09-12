@@ -15,6 +15,7 @@ final class LauncherUpdater {
     }
 
     static boolean isUpdateAvailable(ReleaseManifest manifest) {
+        if (manifest.localDirectory != null) return false;
         try {
             return VersionNumbers.compare(manifest.installerVersion, Main.VERSION) > 0;
         } catch (IllegalArgumentException ignored) {

@@ -1,5 +1,7 @@
 package com.spawnprot.mod;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
@@ -51,6 +53,8 @@ public final class SpawnProtMod implements ModInitializer {
         return SpawnProtState.verifyEnabledPersistence();
     }
 
+    private Object lastSession;
+
     @Override
     public void init() {
         System.out.println("[SpawnProt] Initializing Spawn Protection Tracker");
@@ -62,7 +66,7 @@ public final class SpawnProtMod implements ModInitializer {
 
     @SubscribeEvent
     public void onChatMessage(ChatEvent.Received event) {
-        if (!SpawnProtState.isEnabled()) {
+        if (!ServerContext.isAllowed() || !SpawnProtState.isEnabled()) {
             return;
         }
         IChatComponent message = event.getMessage();
@@ -89,7 +93,7 @@ public final class SpawnProtMod implements ModInitializer {
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
-        if (!SpawnProtState.isEnabled()) {
+        if (!ServerContext.isAllowed() || !SpawnProtState.isEnabled()) {
             return;
         }
         Packet<?> packet = event.getPacket();
@@ -109,18 +113,24 @@ public final class SpawnProtMod implements ModInitializer {
 
     @SubscribeEvent
     public void onRenderOverlay(RenderGameOverlayEvent.Post event) {
-        if (SpawnProtState.isEnabled() && !HudElementRegistry.isEditing()) {
+        if (ServerContext.isAllowed() && SpawnProtState.isEnabled() && !HudElementRegistry.isEditing()) {
             renderer.onRenderOverlay();
         }
     }
 
     @SubscribeEvent
     public void onTick(TickEvent.Pre event) {
+        Object session = ServerContext.connectionId();
+        if (lastSession != session) {
+            lastSession = session;
+            SpawnProtState.onWorldChange();
+        }
         if (toggleKey == null) {
             toggleKey = ModKeyBinding.tryRegister("Toggle SpawnProt");
         }
         if (toggleKey != null) {
             while (toggleKey.isPressed()) {
+                if (!ServerContext.isAllowed()) { ServerContext.explainDisabled(); continue; }
                 boolean enabled = !SpawnProtState.isEnabled();
                 SpawnProtState.setEnabled(enabled);
                 SpawnProtState.saveConfig();
@@ -172,15 +182,7 @@ public final class SpawnProtMod implements ModInitializer {
     }
 
     private static void runOnClientThread(Runnable action) {
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft == null) {
-            return;
-        }
-        if (minecraft.isCallingFromMinecraftThread()) {
-            action.run();
-        } else {
-            minecraft.addScheduledTask(action);
-        }
+        ServerContext.runOnClientThread(action);
     }
 
     private static String localPlayerName() {

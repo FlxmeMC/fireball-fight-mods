@@ -1,5 +1,7 @@
 package net.weavemc.mods.timer;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
@@ -35,6 +37,8 @@ public final class TimerMod implements ModInitializer {
                 && MatchLifecycleParser.parse("[xFlxme] Match Results (Click to view)")
                         == MatchLifecycleParser.Signal.NONE;
     }
+
+    private Object lastSession;
 
     @Override
     public void init() {
@@ -76,29 +80,42 @@ public final class TimerMod implements ModInitializer {
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
-        if (state.isFinishedMatch() && event.getPacket() instanceof S08PacketPlayerPosLook) {
-            clear();
+        if (event.getPacket() instanceof S08PacketPlayerPosLook) {
+            ServerContext.runOnClientThread(new Runnable() {
+                @Override public void run() { if (state.isFinishedMatch()) clear(); }
+            });
         }
     }
 
     @SubscribeEvent
     public void onChat(ChatEvent.Received event) {
-        if (event.getMessage() == null) {
+        if (!ServerContext.isAllowed() || event.getMessage() == null) {
             return;
         }
-        MatchLifecycleParser.Signal signal = MatchLifecycleParser.parse(
+        final MatchLifecycleParser.Signal signal = MatchLifecycleParser.parse(
                 event.getMessage().getFormattedText());
-        if (signal == MatchLifecycleParser.Signal.START) {
-            state.startFresh();
-        } else if (signal == MatchLifecycleParser.Signal.END) {
-            state.finish();
-        }
+        ServerContext.runOnClientThread(new Runnable() {
+            @Override public void run() {
+                if (signal == MatchLifecycleParser.Signal.START) state.startFresh();
+                else if (signal == MatchLifecycleParser.Signal.END) state.finish();
+            }
+        });
     }
 
     @SubscribeEvent
     public void onRender(RenderGameOverlayEvent.Post event) {
+        if (!ServerContext.isAllowed()) { clear(); return; }
         if (!HudElementRegistry.isEditing()) {
             renderer.render();
+        }
+    }
+
+    @SubscribeEvent
+    public void onTick(net.weavemc.api.event.TickEvent.Pre event) {
+        Object session = ServerContext.connectionId();
+        if (lastSession != session) {
+            lastSession = session;
+            clear();
         }
     }
 

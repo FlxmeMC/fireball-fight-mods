@@ -108,9 +108,12 @@ final class InstallService {
         for (ReleaseManifest.FileInfo file : selectedFiles) {
             index++;
             int percent = 5 + (int) ((index - 1) * 75.0 / selectedFiles.size());
-            progress.update(percent, "Downloading " + file.id + "...");
-            progress.log("Downloading " + file.id);
-            byte[] bytes = ManifestClient.download(file.url, 15_000, 120_000);
+            String action = manifest.localDirectory == null ? "Downloading " : "Installing local ";
+            progress.update(percent, action + file.id + "...");
+            progress.log(action + file.id);
+            byte[] bytes = manifest.localDirectory == null
+                    ? ManifestClient.download(file.url, 15_000, 120_000)
+                    : LocalRelease.readArtifact(manifest, file);
             String actualHash = sha256(bytes);
             if (!actualHash.equalsIgnoreCase(file.sha256)) {
                 throw new SecurityException("SHA-256 mismatch for " + file.id);
@@ -233,6 +236,7 @@ final class InstallService {
                     "loader.jar", "mods/1.8.9/blockhit-sound.jar",
                     "mods/1.8.9/endstone-mod.jar", "mods/1.8.9/hud-editor.jar",
                     "mods/1.8.9/spawnprot-mod.jar", "mods/1.8.9/timer.jar",
+                    "mods/1.8.9/server-context.jar", "mods/1.8.9/fireball-hitboxes.jar",
                     "mods/1.8.9/weave-disclosure.jar");
         }
         int index = 0;

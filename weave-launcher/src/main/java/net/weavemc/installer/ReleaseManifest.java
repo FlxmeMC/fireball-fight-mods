@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 
 final class ReleaseManifest {
+    transient java.nio.file.Path localDirectory;
     int schemaVersion;
     String releaseVersion;
     String installerVersion;

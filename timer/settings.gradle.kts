@@ -16,3 +16,9 @@ includeBuild("../hud-editor") {
         substitute(module("net.weavemc.mods:hud-editor")).using(project(":"))
     }
 }
+
+includeBuild("../server-context") {
+    dependencySubstitution {
+        substitute(module("net.weavemc.mods:server-context")).using(project(":"))
+    }
+}

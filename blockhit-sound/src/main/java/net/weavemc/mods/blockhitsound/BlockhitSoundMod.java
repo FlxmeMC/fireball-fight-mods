@@ -1,5 +1,7 @@
 package net.weavemc.mods.blockhitsound;
 
+import net.weavemc.mods.servercontext.ServerContext;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
@@ -19,6 +21,8 @@ public final class BlockhitSoundMod implements ModInitializer {
     private final BlockhitDetector detector = new BlockhitDetector();
     private BlockhitConfig config;
 
+    private Object lastSession;
+
     @Override
     public void init() {
         config = BlockhitConfig.loadDefault();
@@ -30,6 +34,7 @@ public final class BlockhitSoundMod implements ModInitializer {
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
+        if (!ServerContext.isAllowed()) { resetDetection(); return; }
         Packet<?> packet = event.getPacket();
         if (packet instanceof S19PacketEntityStatus
                 && ((S19PacketEntityStatus) packet).getOpCode() == 2) {
@@ -77,7 +82,13 @@ public final class BlockhitSoundMod implements ModInitializer {
 
     @SubscribeEvent
     public void onTick(TickEvent.Pre event) {
+        Object session = ServerContext.connectionId();
+        if (lastSession != session) {
+            lastSession = session;
+            resetDetection();
+        }
         Minecraft minecraft = Minecraft.getMinecraft();
+        if (!ServerContext.isAllowed()) { resetDetection(); return; }
         detector.updateSwordBlocking(isSwordBlocking(minecraft));
     }
 
@@ -98,7 +109,7 @@ public final class BlockhitSoundMod implements ModInitializer {
 
     private void playConfiguredSound() {
         Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft == null || minecraft.thePlayer == null) {
+        if (!ServerContext.isAllowed() || minecraft == null || minecraft.thePlayer == null) {
             return;
         }
         SoundDefinition sound = config.getSound();
@@ -121,14 +132,6 @@ public final class BlockhitSoundMod implements ModInitializer {
     }
 
     private static void runOnClientThread(Runnable action) {
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft == null) {
-            return;
-        }
-        if (minecraft.isCallingFromMinecraftThread()) {
-            action.run();
-        } else {
-            minecraft.addScheduledTask(action);
-        }
+        ServerContext.runOnClientThread(action);
     }
 }

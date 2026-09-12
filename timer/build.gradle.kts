@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.weavemc.mods.timer"
-version = "1.1.0"
+version = "1.1.1"
 
 weave {
     configure {
@@ -13,7 +13,7 @@ weave {
         modId = "timer"
         entryPoints = listOf("net.weavemc.mods.timer.TimerMod")
         mixinConfigs = listOf("timer.mixins.json")
-        dependencies = listOf("minecraft", "java", "hud-editor")
+        dependencies = listOf("minecraft", "java", "server-context", "hud-editor")
         mcpMappings()
     }
     version("1.8.9")
@@ -26,6 +26,8 @@ repositories {
 }
 
 dependencies {
+    compileOnly("net.weavemc.mods:server-context:1.0.1")
+    testImplementation("net.weavemc.mods:server-context:1.0.1")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
     compileOnly("net.weavemc.mods:hud-editor:1.0.0")
