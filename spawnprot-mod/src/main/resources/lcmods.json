@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "spawnprot-mod",
+            "name": "SpawnProt",
+            "description": "Respawn and spawn-protection countdowns for you and other players. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/spawnprot/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["hud"],
+            "enabledByDefault": true
+        }
+    ]
+}

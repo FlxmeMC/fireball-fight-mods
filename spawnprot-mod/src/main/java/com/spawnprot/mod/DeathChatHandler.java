@@ -1,5 +1,7 @@
 package com.spawnprot.mod;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,18 +24,21 @@ public final class DeathChatHandler {
         }
     }
 
-    interface PlayerColorResolver {
+    interface PlayerLookup {
         String colorFor(String playerName);
+
+        boolean isOtherPlayerInWorld(String playerName);
     }
 
     public void onChatMessage(String formattedText, String localPlayerName,
                               String localTeamColor, long receivedAtMs) {
-        onChatMessage(formattedText, localPlayerName, localTeamColor, receivedAtMs, null);
+        onChatMessage(formattedText, localPlayerName, Collections.<String>emptyList(),
+                localTeamColor, receivedAtMs, null);
     }
 
     void onChatMessage(String formattedText, String localPlayerName,
-                       String localTeamColor, long receivedAtMs,
-                       PlayerColorResolver colorResolver) {
+                       Collection<String> localAliases, String localTeamColor,
+                       long receivedAtMs, PlayerLookup playerLookup) {
         if (formattedText == null) {
             return;
         }
@@ -42,24 +47,27 @@ public final class DeathChatHandler {
             return;
         }
 
-        DeathInfo death = serverDeathInfo(formattedText, localPlayerName);
+        DeathInfo death = serverDeathInfo(formattedText, localPlayerName, localAliases);
         if (death != null) {
             String resolvedTeamColor = localTeamColor;
             if (resolvedTeamColor == null && localPlayerName != null) {
                 resolvedTeamColor = colorBeforePlayer(formattedText, localPlayerName);
             }
-            if (resolvedTeamColor == null && colorResolver != null) {
-                resolvedTeamColor = colorResolver.colorFor(localPlayerName);
+            if (resolvedTeamColor == null && playerLookup != null) {
+                resolvedTeamColor = playerLookup.colorFor(localPlayerName);
             }
             String victimTeamColor = death.colorCode;
-            if (colorResolver != null) {
-                String entityColor = colorResolver.colorFor(death.playerName);
+            if (playerLookup != null) {
+                String entityColor = playerLookup.colorFor(death.playerName);
                 if (entityColor != null) {
                     victimTeamColor = entityColor;
                 }
             }
             boolean teammate = sameTeamColor(resolvedTeamColor, victimTeamColor);
-            SpawnProtState.onPlayerDeath(death.playerName, teammate, receivedAtMs);
+            // A victim with no player entity besides us may be our own disguise.
+            boolean unseen = playerLookup != null
+                    && !playerLookup.isOtherPlayerInWorld(death.playerName);
+            SpawnProtState.onPlayerDeath(death.playerName, teammate, receivedAtMs, unseen);
         }
     }
 
@@ -87,6 +95,11 @@ public final class DeathChatHandler {
     }
 
     static DeathInfo serverDeathInfo(String formattedText, String localPlayerName) {
+        return serverDeathInfo(formattedText, localPlayerName, Collections.<String>emptyList());
+    }
+
+    static DeathInfo serverDeathInfo(String formattedText, String localPlayerName,
+                                     Collection<String> localAliases) {
         if (formattedText == null) {
             return null;
         }
@@ -99,10 +112,29 @@ public final class DeathChatHandler {
             return null;
         }
         String playerName = matcher.group(1);
-        if (localPlayerName != null && localPlayerName.equalsIgnoreCase(playerName)) {
+        if (isLocalName(playerName, localPlayerName, localAliases)) {
             return null;
         }
         return new DeathInfo(playerName, colorBeforePlayer(formattedText, playerName));
+    }
+
+    private static boolean isLocalName(String playerName, String localPlayerName,
+                                       Collection<String> localAliases) {
+        if (localPlayerName != null && localPlayerName.equalsIgnoreCase(playerName)) {
+            return true;
+        }
+        if (localAliases != null) {
+            for (String alias : localAliases) {
+                if (alias != null && alias.equalsIgnoreCase(playerName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static boolean isPlayerName(String name) {
+        return name != null && name.matches(PLAYER_NAME);
     }
 
     static String colorBeforePlayer(String formattedText, String playerName) {

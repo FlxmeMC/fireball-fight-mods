@@ -1,11 +1,5 @@
 package com.spawnprot.mod;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -14,15 +8,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.regex.Pattern;
 
 public final class SpawnProtState {
-    static final float MIN_HUD_SCALE = 0.5F;
-    static final float MAX_HUD_SCALE = 5.0F;
-    private static final float DEFAULT_HUD_X = 10.0F;
-    private static final float DEFAULT_HUD_Y = 10.0F;
-    private static final float DEFAULT_HUD_SCALE = 2.0F;
+    // How close a death message must be to our own death to be treated as our disguise.
+    static final long SELF_DEATH_MATCH_MS = 1500L;
 
     public enum Phase {
         RESPAWNING,
@@ -36,25 +26,25 @@ public final class SpawnProtState {
         public long phaseStartMs;
         public long phaseEndMs;
         public final long deathTimeMs;
+        final boolean unseen;
 
         TrackedPlayer(String name, boolean teammate, Phase phase,
-                      long phaseStartMs, long phaseEndMs, long deathTimeMs) {
+                      long phaseStartMs, long phaseEndMs, long deathTimeMs, boolean unseen) {
             this.name = name;
             this.teammate = teammate;
             this.phase = phase;
             this.phaseStartMs = phaseStartMs;
             this.phaseEndMs = phaseEndMs;
             this.deathTimeMs = deathTimeMs;
+            this.unseen = unseen;
         }
     }
 
     private static final Pattern COLOR_CODE_PATTERN = Pattern.compile("(?i)\u00A7[0-9A-FK-OR]");
 
+    /** Kept in sync with the SpawnProt tile's sliders by {@link SpawnProtSettings}. */
     public static long respawnMs = 3000L;
     public static long spawnProtMs = 2500L;
-    public static float hudX = DEFAULT_HUD_X;
-    public static float hudY = DEFAULT_HUD_Y;
-    public static float hudScale = DEFAULT_HUD_SCALE;
 
     private static final Map<String, TrackedPlayer> TRACKED_PLAYERS =
             new LinkedHashMap<String, TrackedPlayer>();
@@ -63,9 +53,8 @@ public final class SpawnProtState {
     private static boolean selfSpawnProtActive;
     private static long selfSpawnProtStartMs;
     private static long selfSpawnProtEndMs;
-    private static boolean enabled = true;
+    private static long lastSelfDeathMs;
     private static int worldGeneration;
-    private static File configFile;
 
     private SpawnProtState() {
     }
@@ -76,12 +65,40 @@ public final class SpawnProtState {
 
     public static synchronized void onPlayerDeath(
             String playerName, boolean teammate, long deathTimeMs) {
+        onPlayerDeath(playerName, teammate, deathTimeMs, false);
+    }
+
+    /**
+     * @param unseen true when no player entity other than the local player has this name,
+     *               which is how our own disguised name looks from the client
+     */
+    public static synchronized void onPlayerDeath(
+            String playerName, boolean teammate, long deathTimeMs, boolean unseen) {
         if (playerName == null || playerName.isEmpty()) {
             return;
         }
         long now = Math.min(deathTimeMs, System.currentTimeMillis());
+        if (unseen && isNearSelfDeath(now)) {
+            return;
+        }
         TRACKED_PLAYERS.put(playerName.toLowerCase(Locale.ROOT), new TrackedPlayer(
-                playerName, teammate, Phase.RESPAWNING, now, now + respawnMs, now));
+                playerName, teammate, Phase.RESPAWNING, now, now + respawnMs, now, unseen));
+    }
+
+    private static boolean isNearSelfDeath(long timeMs) {
+        return lastSelfDeathMs != 0L && Math.abs(timeMs - lastSelfDeathMs) <= SELF_DEATH_MATCH_MS;
+    }
+
+    private static void recordSelfDeath(long deathTimeMs) {
+        lastSelfDeathMs = deathTimeMs;
+        Iterator<TrackedPlayer> iterator = TRACKED_PLAYERS.values().iterator();
+        while (iterator.hasNext()) {
+            TrackedPlayer player = iterator.next();
+            if (player.unseen && player.phase == Phase.RESPAWNING
+                    && isNearSelfDeath(player.deathTimeMs)) {
+                iterator.remove();
+            }
+        }
     }
 
     public static synchronized void onSelfDeathCanRespawn() {
@@ -93,6 +110,7 @@ public final class SpawnProtState {
             return;
         }
         long now = Math.min(deathTimeMs, System.currentTimeMillis());
+        recordSelfDeath(now);
         selfRespawning = true;
         selfRespawnEndMs = now + respawnMs;
         selfSpawnProtActive = false;
@@ -101,6 +119,13 @@ public final class SpawnProtState {
     }
 
     public static synchronized void onSelfDeathFinal() {
+        onSelfDeathFinal(System.currentTimeMillis());
+    }
+
+    public static synchronized void onSelfDeathFinal(long deathTimeMs) {
+        if (!selfRespawning) {
+            recordSelfDeath(Math.min(deathTimeMs, System.currentTimeMillis()));
+        }
         selfRespawning = false;
         selfRespawnEndMs = 0L;
         selfSpawnProtActive = false;
@@ -218,6 +243,7 @@ public final class SpawnProtState {
 
     public static synchronized void clearAll() {
         TRACKED_PLAYERS.clear();
+        lastSelfDeathMs = 0L;
         selfRespawning = false;
         selfRespawnEndMs = 0L;
         selfSpawnProtActive = false;
@@ -228,23 +254,6 @@ public final class SpawnProtState {
     public static synchronized void onWorldChange() {
         clearAll();
         worldGeneration++;
-    }
-
-    public static boolean isEnabled() {
-        return enabled;
-    }
-
-    public static void setEnabled(boolean value) {
-        enabled = value;
-        if (!enabled) {
-            clearAll();
-        }
-    }
-
-    static void resetHud() {
-        hudX = DEFAULT_HUD_X;
-        hudY = DEFAULT_HUD_Y;
-        hudScale = DEFAULT_HUD_SCALE;
     }
 
     public static boolean isMatchEndMessage(String formattedText) {
@@ -269,74 +278,5 @@ public final class SpawnProtState {
 
     public static String formatCountdown(double seconds) {
         return String.format(Locale.ROOT, "%.1f", seconds);
-    }
-
-    public static void loadConfig() {
-        File weaveHome = new File(System.getProperty("user.home"), ".weave");
-        loadConfig(new File(weaveHome, "config/spawnprot"));
-    }
-
-    static void loadConfig(File dataDirectory) {
-        configFile = new File(dataDirectory, "config.properties");
-        if (!configFile.isFile()) {
-            return;
-        }
-        Properties properties = new Properties();
-        try (FileInputStream input = new FileInputStream(configFile)) {
-            properties.load(input);
-            respawnMs = Long.parseLong(properties.getProperty("respawn-ms", "3000"));
-            spawnProtMs = Long.parseLong(properties.getProperty("spawn-prot-ms", "2500"));
-            hudX = Float.parseFloat(properties.getProperty("hud-x", "10"));
-            hudY = Float.parseFloat(properties.getProperty("hud-y", "10"));
-            hudScale = Float.parseFloat(properties.getProperty("hud-scale", "2.0"));
-            enabled = Boolean.parseBoolean(properties.getProperty("enabled", "true"));
-            System.out.println("[SpawnProt] Loaded configuration");
-        } catch (Exception exception) {
-            System.err.println("[SpawnProt] Failed to load config: " + exception.getMessage());
-        }
-    }
-
-    public static void saveConfig() {
-        if (configFile == null) {
-            return;
-        }
-        Properties properties = new Properties();
-        properties.setProperty("respawn-ms", String.valueOf(respawnMs));
-        properties.setProperty("spawn-prot-ms", String.valueOf(spawnProtMs));
-        properties.setProperty("hud-x", String.valueOf(hudX));
-        properties.setProperty("hud-y", String.valueOf(hudY));
-        properties.setProperty("hud-scale", String.valueOf(hudScale));
-        properties.setProperty("enabled", String.valueOf(enabled));
-        File parent = configFile.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) {
-            System.err.println("[SpawnProt] Failed to create config directory: " + parent);
-            return;
-        }
-        try (FileOutputStream output = new FileOutputStream(configFile)) {
-            properties.store(output, "SpawnProt Config");
-        } catch (Exception exception) {
-            System.err.println("[SpawnProt] Failed to save config: " + exception.getMessage());
-        }
-    }
-
-    static boolean verifyEnabledPersistence() throws IOException {
-        Path directory = Files.createTempDirectory("weave-spawnprot-persistence-");
-        Path file = directory.resolve("config.properties");
-        try {
-            loadConfig(directory.toFile());
-            setEnabled(false);
-            saveConfig();
-            setEnabled(true);
-            loadConfig(directory.toFile());
-            boolean disabledReloaded = !isEnabled();
-            setEnabled(true);
-            saveConfig();
-            setEnabled(false);
-            loadConfig(directory.toFile());
-            return disabledReloaded && isEnabled();
-        } finally {
-            Files.deleteIfExists(file);
-            Files.deleteIfExists(directory);
-        }
     }
 }

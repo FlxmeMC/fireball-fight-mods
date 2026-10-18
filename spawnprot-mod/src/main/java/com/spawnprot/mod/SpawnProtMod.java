@@ -3,7 +3,7 @@ package com.spawnprot.mod;
 import net.weavemc.mods.servercontext.ServerContext;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
+import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -15,26 +15,23 @@ import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.network.play.server.S45PacketTitle;
 import net.minecraft.scoreboard.ScorePlayerTeam;
 import net.minecraft.scoreboard.Team;
-import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.IChatComponent;
 import net.weavemc.api.ModInitializer;
 import net.weavemc.api.event.ChatEvent;
 import net.weavemc.api.event.EventBus;
 import net.weavemc.api.event.PacketEvent;
-import net.weavemc.api.event.RenderGameOverlayEvent;
 import net.weavemc.api.event.ShutdownEvent;
 import net.weavemc.api.event.SubscribeEvent;
 import net.weavemc.api.event.TickEvent;
 import net.weavemc.api.event.WorldEvent;
-import net.weavemc.mods.hudeditor.HudElementRegistry;
 
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class SpawnProtMod implements ModInitializer {
     private final DeathChatHandler deathChatHandler = new DeathChatHandler();
     private final TitlePacketHandler titlePacketHandler = new TitlePacketHandler();
-    private final SpawnProtRenderer renderer = new SpawnProtRenderer();
-    private KeyBinding toggleKey;
+    private LegacyConfig legacyConfig;
 
     static boolean verifyServerMessageSecurity() {
         return "xFlxme".equals(DeathChatHandler.serverDeathPlayer(
@@ -49,24 +46,20 @@ public final class SpawnProtMod implements ModInitializer {
                         "Alex died! nice try", "xFlxme") == null;
     }
 
-    static boolean verifyEnabledPersistence() throws IOException {
-        return SpawnProtState.verifyEnabledPersistence();
-    }
-
     private Object lastSession;
 
     @Override
     public void init() {
         System.out.println("[SpawnProt] Initializing Spawn Protection Tracker");
-        SpawnProtState.loadConfig();
-        HudElementRegistry.register(new SpawnProtHudElement());
+        legacyConfig = LegacyConfig.spawnProt();
+        SpawnProtSettings.register(new SpawnProtRenderer(), legacyConfig);
         EventBus.subscribe(this);
         System.out.println("[SpawnProt] Spawn Protection Tracker initialized");
     }
 
     @SubscribeEvent
     public void onChatMessage(ChatEvent.Received event) {
-        if (!ServerContext.isAllowed() || !SpawnProtState.isEnabled()) {
+        if (!ServerContext.isAllowed() || !SpawnProtSettings.isEnabled()) {
             return;
         }
         IChatComponent message = event.getMessage();
@@ -79,11 +72,17 @@ public final class SpawnProtMod implements ModInitializer {
                 @Override
                 public void run() {
                     deathChatHandler.onChatMessage(
-                            formattedText, playerName, teamColor, receivedAtMs,
-                            new DeathChatHandler.PlayerColorResolver() {
+                            formattedText, playerName, localDisguiseNames(),
+                            teamColor, receivedAtMs,
+                            new DeathChatHandler.PlayerLookup() {
                                 @Override
                                 public String colorFor(String name) {
                                     return playerTeamColor(name);
+                                }
+
+                                @Override
+                                public boolean isOtherPlayerInWorld(String name) {
+                                    return otherPlayerInWorld(name);
                                 }
                             });
                 }
@@ -93,7 +92,7 @@ public final class SpawnProtMod implements ModInitializer {
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
-        if (!ServerContext.isAllowed() || !SpawnProtState.isEnabled()) {
+        if (!ServerContext.isAllowed() || !SpawnProtSettings.isEnabled()) {
             return;
         }
         Packet<?> packet = event.getPacket();
@@ -112,34 +111,11 @@ public final class SpawnProtMod implements ModInitializer {
     }
 
     @SubscribeEvent
-    public void onRenderOverlay(RenderGameOverlayEvent.Post event) {
-        if (ServerContext.isAllowed() && SpawnProtState.isEnabled() && !HudElementRegistry.isEditing()) {
-            renderer.onRenderOverlay();
-        }
-    }
-
-    @SubscribeEvent
     public void onTick(TickEvent.Pre event) {
         Object session = ServerContext.connectionId();
         if (lastSession != session) {
             lastSession = session;
             SpawnProtState.onWorldChange();
-        }
-        if (toggleKey == null) {
-            toggleKey = ModKeyBinding.tryRegister("Toggle SpawnProt");
-        }
-        if (toggleKey != null) {
-            while (toggleKey.isPressed()) {
-                if (!ServerContext.isAllowed()) { ServerContext.explainDisabled(); continue; }
-                boolean enabled = !SpawnProtState.isEnabled();
-                SpawnProtState.setEnabled(enabled);
-                SpawnProtState.saveConfig();
-                Minecraft minecraft = Minecraft.getMinecraft();
-                if (minecraft != null && minecraft.thePlayer != null) {
-                    minecraft.thePlayer.addChatMessage(new ChatComponentText(
-                            "SpawnProt: " + (enabled ? "ON" : "OFF")));
-                }
-            }
         }
     }
 
@@ -155,7 +131,9 @@ public final class SpawnProtMod implements ModInitializer {
 
     @SubscribeEvent
     public void onShutdown(ShutdownEvent event) {
-        SpawnProtState.saveConfig();
+        if (legacyConfig != null) {
+            legacyConfig.retireIfImported();
+        }
         System.out.println("[SpawnProt] Spawn Protection Tracker shut down");
     }
 
@@ -190,6 +168,49 @@ public final class SpawnProtMod implements ModInitializer {
         return minecraft == null || minecraft.thePlayer == null
                 ? null
                 : minecraft.thePlayer.getName();
+    }
+
+    // Disguise plugins keep our UUID but send a different name in our own tab list entry,
+    // while thePlayer.getName() still returns the real account name.
+    private static List<String> localDisguiseNames() {
+        List<String> names = new ArrayList<String>();
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft == null || minecraft.thePlayer == null || minecraft.getNetHandler() == null) {
+            return names;
+        }
+        NetworkPlayerInfo info = minecraft.getNetHandler().getPlayerInfo(
+                minecraft.thePlayer.getUniqueID());
+        if (info == null) {
+            return names;
+        }
+        if (info.getGameProfile() != null) {
+            addDisguiseName(names, info.getGameProfile().getName());
+        }
+        if (info.getDisplayName() != null) {
+            String[] parts = SpawnProtState.stripColorCodes(
+                    info.getDisplayName().getUnformattedText()).trim().split("\\s+");
+            addDisguiseName(names, parts[parts.length - 1]);
+        }
+        return names;
+    }
+
+    private static void addDisguiseName(List<String> names, String name) {
+        if (DeathChatHandler.isPlayerName(name)) {
+            names.add(name);
+        }
+    }
+
+    private static boolean otherPlayerInWorld(String playerName) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft == null || minecraft.theWorld == null || playerName == null) {
+            return true;
+        }
+        for (EntityPlayer player : minecraft.theWorld.playerEntities) {
+            if (player != minecraft.thePlayer && playerName.equalsIgnoreCase(player.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String localTeamColor() {

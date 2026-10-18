@@ -7,15 +7,12 @@ import javax.swing.ImageIcon;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -65,9 +62,9 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
     private final JButton installButton = new JButton("Install selected mods");
     private final JButton uninstallButton = new JButton("Uninstall");
     private final JButton diagnosticsButton = new JButton("Logs");
+    private final JButton retryButton = new JButton("Retry");
     private final Map<String, ModCard> modCards = new LinkedHashMap<String, ModCard>();
     private final InstallService service = new InstallService();
-    private final InstallSettings installSettings;
     private ReleaseManifest manifest;
     private boolean installationCompleted;
     private boolean pendingChanges;
@@ -75,7 +72,6 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
 
     InstallerFrame() {
         super(ManifestClient.isLocalMode() ? "Fireball Fight Mods - Local build" : "Fireball Fight Mods");
-        installSettings = service.loadSettings();
         ImageIcon appIcon = loadInstallerIcon(32);
         if (appIcon.getIconWidth() > 0) {
             setIconImage(appIcon.getImage());
@@ -100,6 +96,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
         installButton.addActionListener(event -> install());
         uninstallButton.addActionListener(event -> uninstall());
         diagnosticsButton.addActionListener(event -> DiagnosticsWindow.open());
+        retryButton.addActionListener(event -> loadManifest());
         setBusy(true);
         loadManifest();
     }
@@ -285,6 +282,10 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
         operationStatus.setForeground(MUTED);
         operationStatus.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         state.add(operationStatus, BorderLayout.WEST);
+        styleLinkButton(retryButton);
+        retryButton.setToolTipText("Try to reach the release server again");
+        retryButton.setVisible(false);
+        state.add(retryButton, BorderLayout.EAST);
         footer.add(state, BorderLayout.NORTH);
 
         progress.setValue(0);
@@ -380,6 +381,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
 
     private void loadManifest() {
         setBusy(true);
+        retryButton.setVisible(false);
         update(8, ManifestClient.isLocalMode() ? "Checking local build artifacts..." : "Verifying the latest release...");
         new SwingWorker<ReleaseManifest, Void>() {
             @Override
@@ -398,10 +400,14 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                     loaded = true;
                 } catch (Exception exception) {
                     manifest = null;
+                    InstallerLog.error("The release manifest could not be loaded", exception);
                     update(0, ManifestClient.isLocalMode() ? "Local build unavailable - rebuild with launch-local-app.ps1"
                             : service.isInstalled() ? "Release server unavailable - uninstall remains available"
                             : "Could not reach the release server");
-                    showError(rootMessage(exception));
+                    retryButton.setVisible(true);
+                    showError(rootMessage(exception)
+                            + "\n\nDetails were saved to " + InstallerLog.file()
+                            + "\nUse the Logs button and \"Copy all logs\" when asking for help.");
                 } finally {
                     setBusy(false);
                 }
@@ -464,23 +470,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
         modGrid.removeAll();
         modCards.clear();
         for (ReleaseManifest.ModInfo mod : manifest.mods) {
-            Runnable settingsAction = null;
-            if ("blockhit-sound".equals(mod.id)) {
-                settingsAction = new Runnable() {
-                    @Override
-                    public void run() {
-                        showBlockhitSettings();
-                    }
-                };
-            } else if ("endstone-mod".equals(mod.id)) {
-                settingsAction = new Runnable() {
-                    @Override
-                    public void run() {
-                        showEndstoneSettings();
-                    }
-                };
-            }
-            ModCard card = new ModCard(mod, settingsAction, new Runnable() {
+            ModCard card = new ModCard(mod, new Runnable() {
                 @Override
                 public void run() {
                     markPendingChanges();
@@ -517,7 +507,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                     update(2, "Closing Lunar Client…");
                     service.closeLunar();
                 }
-                service.install(manifest, selected, installSettings, InstallerFrame.this);
+                service.install(manifest, selected, InstallerFrame.this);
                 installationCompleted = true;
                 pendingChanges = false;
             }
@@ -530,88 +520,6 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                         "Have a suggestion or feedback? Join the Discord and share it with us.");
             }
         });
-    }
-
-    private void showBlockhitSettings() {
-        List<String> sounds = MinecraftSoundCatalog.load();
-        JComboBox<String> soundPicker = new JComboBox<String>(
-                sounds.toArray(new String[sounds.size()]));
-        soundPicker.setEditable(true);
-        soundPicker.setSelectedItem(installSettings.blockhitSound);
-        soundPicker.setMaximumRowCount(12);
-        soundPicker.setAlignmentX(Component.LEFT_ALIGNMENT);
-        soundPicker.setMaximumSize(new Dimension(430, 34));
-
-        JSpinner pitch = new JSpinner(new SpinnerNumberModel(
-                installSettings.blockhitPitch, 0.5D, 2.0D, 0.05D));
-        pitch.setMaximumSize(new Dimension(110, 32));
-
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        JLabel soundLabel = new JLabel("Minecraft 1.8.9 sound event");
-        soundLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(soundLabel);
-        panel.add(Box.createVerticalStrut(6));
-        panel.add(soundPicker);
-        panel.add(Box.createVerticalStrut(15));
-        JLabel pitchLabel = new JLabel("Pitch (0.50 to 2.00)");
-        pitchLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(pitchLabel);
-        panel.add(Box.createVerticalStrut(6));
-        pitch.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(pitch);
-        panel.add(Box.createVerticalStrut(10));
-        JLabel note = new JLabel("You can type a sound ID if it is not listed.");
-        note.setForeground(MUTED);
-        note.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(note);
-
-        if (JOptionPane.showConfirmDialog(this, panel, "Blockhit Sound settings",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
-                == JOptionPane.OK_OPTION) {
-            Object chosen = soundPicker.getEditor().getItem();
-            String sound = chosen == null ? "" : chosen.toString().trim();
-            if (!sound.matches("[a-zA-Z0-9_.:-]+")) {
-                showError("Enter a valid Minecraft sound event ID.");
-                return;
-            }
-            installSettings.blockhitSound = sound;
-            installSettings.blockhitPitch = ((Number) pitch.getValue()).doubleValue();
-            markPendingChanges();
-        }
-    }
-
-    private void showEndstoneSettings() {
-        String[] choices = {"3 blocks", "5 blocks", "Always glass"};
-        JComboBox<String> mode = new JComboBox<String>(choices);
-        if (InstallSettings.ENDSTONE_RADIUS_3.equals(installSettings.endstoneMode)) {
-            mode.setSelectedIndex(0);
-        } else if (InstallSettings.ENDSTONE_ALWAYS.equals(installSettings.endstoneMode)) {
-            mode.setSelectedIndex(2);
-        } else {
-            mode.setSelectedIndex(1);
-        }
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        JLabel label = new JLabel("Convert end stone to glass:");
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(label);
-        panel.add(Box.createVerticalStrut(8));
-        mode.setAlignmentX(Component.LEFT_ALIGNMENT);
-        mode.setMaximumSize(new Dimension(260, 34));
-        panel.add(mode);
-
-        if (JOptionPane.showConfirmDialog(this, panel, "Endstone settings",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
-                == JOptionPane.OK_OPTION) {
-            int selected = mode.getSelectedIndex();
-            installSettings.endstoneMode = selected == 0
-                    ? InstallSettings.ENDSTONE_RADIUS_3
-                    : selected == 2
-                    ? InstallSettings.ENDSTONE_ALWAYS
-                    : InstallSettings.ENDSTONE_RADIUS_5;
-            markPendingChanges();
-        }
     }
 
     private void markPendingChanges() {
@@ -799,11 +707,9 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
     private static final class ModCard extends JPanel {
         private static final long serialVersionUID = 1L;
         private final JCheckBox selected = new JCheckBox();
-        private final JButton settingsButton;
         private boolean hovered;
 
-        private ModCard(ReleaseManifest.ModInfo mod, Runnable settingsAction,
-                        Runnable selectionChanged) {
+        private ModCard(ReleaseManifest.ModInfo mod, Runnable selectionChanged) {
             setOpaque(false);
             setLayout(new BorderLayout(12, 0));
             setBorder(BorderFactory.createEmptyBorder(18, 16, 18, 14));
@@ -858,20 +764,6 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
             controls.setPreferredSize(new Dimension(64, 0));
             controls.setMinimumSize(new Dimension(64, 0));
             controls.add(selected);
-            if (settingsAction != null) {
-                settingsButton = new JButton("Settings");
-                styleSecondaryButton(settingsButton);
-                settingsButton.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-                settingsButton.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(BORDER),
-                        BorderFactory.createEmptyBorder(6, 9, 6, 9)));
-                settingsButton.setAlignmentX(Component.RIGHT_ALIGNMENT);
-                settingsButton.addActionListener(event -> settingsAction.run());
-                controls.add(Box.createVerticalGlue());
-                controls.add(settingsButton);
-            } else {
-                settingsButton = null;
-            }
             add(controls, BorderLayout.EAST);
 
             MouseAdapter mouse = new MouseAdapter() {
@@ -914,6 +806,8 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                 fileName = "timer.png";
             } else if ("fireball-hitboxes".equals(modId)) {
                 fileName = "fireball.png";
+            } else if ("fireball-indicator".equals(modId)) {
+                fileName = "fireball-indicator.png";
             } else {
                 return new ImageIcon();
             }
@@ -924,10 +818,6 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
             }
             try {
                 BufferedImage source = ImageIO.read(resource);
-                if ("timer.png".equals(fileName) && source.getHeight() > source.getWidth()) {
-                    source = source.getSubimage(0, 0, source.getWidth(), source.getWidth());
-                }
-                source = trimTransparentPadding(source);
                 int size = 48;
                 double scale = Math.min((double) size / source.getWidth(),
                         (double) size / source.getHeight());
@@ -937,7 +827,7 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
                 Graphics2D graphics = scaled.createGraphics();
                 try {
                     graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                            RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                            RenderingHints.VALUE_INTERPOLATION_BICUBIC);
                     graphics.setRenderingHint(RenderingHints.KEY_RENDERING,
                             RenderingHints.VALUE_RENDER_QUALITY);
                     graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
@@ -959,9 +849,6 @@ final class InstallerFrame extends JFrame implements InstallService.Progress {
 
         private void setSelectionEnabled(boolean enabled) {
             selected.setEnabled(enabled);
-            if (settingsButton != null) {
-                settingsButton.setEnabled(enabled);
-            }
             setCursor(enabled ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
                     : Cursor.getDefaultCursor());
         }

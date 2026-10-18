@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "blockhit-sound",
+            "name": "Blockhit Sound",
+            "description": "Plays a sound when you land a confirmed sword blockhit. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/blockhitsound/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["mechanic"],
+            "enabledByDefault": true
+        }
+    ]
+}

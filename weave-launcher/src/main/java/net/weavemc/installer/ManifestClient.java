@@ -6,7 +6,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PublicKey;
@@ -31,10 +30,16 @@ final class ManifestClient {
         if (isLocalMode()) {
             return LocalRelease.load(java.nio.file.Paths.get(System.getProperty("weave.localManifest")));
         }
+        InstallerLog.info("Fetching release manifest from " + MANIFEST_URL);
         byte[] manifestBytes = download(MANIFEST_URL, 15_000, 30_000);
-        byte[] signatureBytes = Base64.getDecoder().decode(
-                new String(download(SIGNATURE_URL, 15_000, 30_000),
-                        StandardCharsets.US_ASCII).trim());
+        byte[] signatureBytes;
+        try {
+            signatureBytes = Base64.getDecoder().decode(
+                    new String(download(SIGNATURE_URL, 15_000, 30_000),
+                            StandardCharsets.US_ASCII).trim());
+        } catch (IllegalArgumentException exception) {
+            throw new SecurityException("The update manifest signature is malformed.", exception);
+        }
         verify(manifestBytes, signatureBytes);
         ReleaseManifest manifest = new Gson().fromJson(
                 new String(manifestBytes, StandardCharsets.UTF_8), ReleaseManifest.class);
@@ -45,6 +50,8 @@ final class ManifestClient {
                 || manifest.files == null || manifest.mods == null) {
             throw new IOException("The update server returned an unsupported manifest.");
         }
+        InstallerLog.info("Verified release manifest " + manifest.releaseVersion
+                + " (installer " + manifest.installerVersion + ")");
         return manifest;
     }
 
@@ -63,24 +70,24 @@ final class ManifestClient {
     }
 
     static byte[] download(String url, int connectTimeout, int readTimeout) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setConnectTimeout(connectTimeout);
-        connection.setReadTimeout(readTimeout);
-        connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent", "Fireball-Fight-Mods/" + Main.VERSION);
-        int status = connection.getResponseCode();
-        if (status < 200 || status >= 300) {
-            connection.disconnect();
-            throw new IOException("Download failed with HTTP " + status + ": " + url);
-        }
-        try (InputStream input = connection.getInputStream();
-             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[16 * 1024];
-            int read;
-            while ((read = input.read(buffer)) >= 0) {
-                output.write(buffer, 0, read);
+        HttpURLConnection connection = HttpConnections.connect(url, connectTimeout, readTimeout);
+        try {
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) {
+                throw HttpConnections.statusFailure(connection, url);
             }
-            return output.toByteArray();
+            try (InputStream input = connection.getInputStream();
+                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[16 * 1024];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    output.write(buffer, 0, read);
+                }
+                return output.toByteArray();
+            }
+        } catch (IOException exception) {
+            InstallerLog.error("Download failed for " + url, exception);
+            throw HttpConnections.describe(url, exception);
         } finally {
             connection.disconnect();
         }

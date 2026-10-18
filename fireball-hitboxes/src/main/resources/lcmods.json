@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "fireball-hitboxes",
+            "name": "Fireball Hitboxes",
+            "description": "Shows the real punchable area of fireballs in F3+B and Lunar's Hitbox mod. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/fireballhitboxes/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["mechanic"],
+            "enabledByDefault": true
+        }
+    ]
+}

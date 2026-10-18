@@ -10,6 +10,6 @@ public final class EndstoneCommand extends Command {
 
     @Override
     public void execute(String[] args) {
-        EndstoneMod.toggleFeature();
+        EndstoneMod.showToggleHint();
     }
 }

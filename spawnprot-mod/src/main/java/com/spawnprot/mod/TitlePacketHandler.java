@@ -32,7 +32,7 @@ public final class TitlePacketHandler {
         }
         String stripped = SpawnProtState.stripColorCodes(subtitleText);
         if (stripped.contains("Now spectating")) {
-            SpawnProtState.onSelfDeathFinal();
+            SpawnProtState.onSelfDeathFinal(receivedAtMs);
         } else if (stripped.contains("Respawning in")) {
             SpawnProtState.onSelfDeathCanRespawn(receivedAtMs);
         }

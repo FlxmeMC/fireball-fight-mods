@@ -13,15 +13,12 @@ import static org.junit.Assert.assertTrue;
 public final class SpawnProtStateTest {
     @Before
     public void setUp() {
-        SpawnProtState.setEnabled(true);
         SpawnProtState.clearAll();
     }
 
     @After
     public void tearDown() {
-        SpawnProtState.setEnabled(true);
         SpawnProtState.clearAll();
-        SpawnProtState.resetHud();
     }
 
     @Test
@@ -47,16 +44,10 @@ public final class SpawnProtStateTest {
     }
 
     @Test
-    public void toggleDisablesAndClearsTracking() {
+    public void clearAllRemovesTracking() {
         SpawnProtState.onPlayerDeath("Alex");
-        SpawnProtState.setEnabled(false);
-        assertFalse(SpawnProtState.isEnabled());
+        SpawnProtState.clearAll();
         assertTrue(SpawnProtState.getActiveTrackedPlayers().isEmpty());
-    }
-
-    @Test
-    public void toggleStatePersistsAcrossReloads() throws Exception {
-        assertTrue(SpawnProtState.verifyEnabledPersistence());
     }
 
     @Test
@@ -120,5 +111,45 @@ public final class SpawnProtStateTest {
         assertTrue(players.get(0).teammate);
         assertEquals("Alex", players.get(1).name);
         assertFalse(players.get(1).teammate);
+    }
+
+    @Test
+    public void unseenDeathAtOurDeathIsTreatedAsOurDisguise() {
+        long now = System.currentTimeMillis();
+        SpawnProtState.onPlayerDeath("MaskedName", false, now - 50L, true);
+        SpawnProtState.onPlayerDeath("Alex", false, now - 50L, false);
+        SpawnProtState.onSelfDeathCanRespawn(now);
+
+        List<SpawnProtState.TrackedPlayer> players =
+                SpawnProtState.getActiveTrackedPlayers();
+        assertEquals(1, players.size());
+        assertEquals("Alex", players.get(0).name);
+    }
+
+    @Test
+    public void unseenDeathArrivingAfterOurDeathIsIgnored() {
+        long now = System.currentTimeMillis();
+        SpawnProtState.onSelfDeathCanRespawn(now - 50L);
+        SpawnProtState.onPlayerDeath("MaskedName", false, now, true);
+
+        assertTrue(SpawnProtState.getActiveTrackedPlayers().isEmpty());
+    }
+
+    @Test
+    public void finalDeathAlsoCancelsOurDisguise() {
+        long now = System.currentTimeMillis();
+        SpawnProtState.onPlayerDeath("MaskedName", false, now - 50L, true);
+        SpawnProtState.onSelfDeathFinal(now);
+
+        assertTrue(SpawnProtState.getActiveTrackedPlayers().isEmpty());
+    }
+
+    @Test
+    public void unseenDeathFarFromOurDeathIsStillTracked() {
+        long now = System.currentTimeMillis();
+        SpawnProtState.onSelfDeathCanRespawn(now - SpawnProtState.SELF_DEATH_MATCH_MS - 500L);
+        SpawnProtState.onPlayerDeath("Alex", false, now, true);
+
+        assertEquals(1, SpawnProtState.getActiveTrackedPlayers().size());
     }
 }

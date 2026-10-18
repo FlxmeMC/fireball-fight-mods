@@ -8,13 +8,24 @@ import javax.swing.UIManager;
 import java.io.IOException;
 
 public final class Main {
-    static final String VERSION = "1.0.10";
+    static final String VERSION = "1.0.14";
     private static SingleInstanceLock instanceLock;
+
+    static {
+        // Honour the Windows proxy settings when a direct connection fails. Must be
+        // set before any networking class initialises.
+        if (System.getProperty("java.net.useSystemProxies") == null) {
+            System.setProperty("java.net.useSystemProxies", "true");
+        }
+    }
 
     private Main() {
     }
 
     public static void main(String[] arguments) {
+        InstallerLog.info("Fireball Fight Mods " + VERSION + " starting on "
+                + System.getProperty("os.name") + " " + System.getProperty("os.version")
+                + ", Java " + System.getProperty("java.version"));
         if (arguments.length == 1 && "--verify-manifest".equals(arguments[0])) {
             try {
                 ReleaseManifest manifest = new ManifestClient().fetch();

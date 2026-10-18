@@ -1,1 +1,1 @@
-rootProject.name = "weave-launcher"
+rootProject.name = "weave-online-installer"

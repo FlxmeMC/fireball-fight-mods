@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumWorldBlockLayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.IBlockAccess;
@@ -48,8 +49,30 @@ public final class EndstoneFeature {
         return glassRadius == 3 ? MODE_RADIUS_3 : MODE_RADIUS_5;
     }
 
+    /**
+     * Cutout when the pack's glass model is visible there; translucent when the
+     * pack's glass texture is invisible and endstone is drawn faded instead.
+     */
     public static EnumWorldBlockLayer getGlassRenderLayer() {
-        return EnumWorldBlockLayer.CUTOUT;
+        return isGhostMode() ? EnumWorldBlockLayer.TRANSLUCENT : EnumWorldBlockLayer.CUTOUT;
+    }
+
+    /** True when the active pack's glass would be invisible, so faded endstone is drawn instead. */
+    public static boolean isGhostMode() {
+        return !GlassAppearance.isGlassTextureVisible();
+    }
+
+    /**
+     * In ghost mode a faded endstone face that touches another faded endstone
+     * is hidden, as vanilla glass hides faces between glass blocks; otherwise
+     * the stacked translucent faces darken the view.
+     */
+    public static boolean shouldHideFaceBetweenGhosts(IBlockAccess world, BlockPos suppliedNeighborPos,
+                                                      EnumFacing side) {
+        if (!isGhostMode() || side == null) {
+            return false;
+        }
+        return shouldTreatAsGlass(world, suppliedNeighborPos.offset(side.getOpposite()));
     }
 
     public static IBakedModel getGlassModel() {

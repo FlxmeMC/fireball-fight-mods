@@ -1,15 +1,16 @@
 {
-  "appVersion": "1.0.8",
-  "installerVersion": "1.0.10",
+  "appVersion": "1.0.11",
+  "installerVersion": "1.0.14",
   "components": {
     "loader": "1.0.0",
-    "blockhit-sound": "1.0.1",
-    "endstone-mod": "1.0.3",
-    "hud-editor": "1.0.1",
-    "spawnprot-mod": "1.0.2",
-    "timer": "1.1.1",
+    "blockhit-sound": "1.1.0",
+    "endstone-mod": "1.1.0",
+    "spawnprot-mod": "1.1.0",
+    "timer": "1.2.0",
     "weave-disclosure": "1.0.0",
     "server-context": "1.0.1",
-    "fireball-hitboxes": "1.0.0"
+    "fireball-hitboxes": "1.1.0",
+    "fireball-indicator": "1.0.0",
+    "lunar-mod-api": "1.0.1"
   }
 }

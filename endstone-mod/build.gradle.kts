@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.weavemc.mods.endstone"
-version = "1.0.3"
+version = "1.1.0"
 
 weave {
     configure {
@@ -13,7 +13,7 @@ weave {
         modId = "endstone-mod"
         entryPoints = listOf("net.weavemc.mods.endstone.EndstoneMod")
         mixinConfigs = listOf("endstone-mod.mixins.json")
-        dependencies = listOf("minecraft", "java", "server-context")
+        dependencies = listOf("minecraft", "java", "server-context", "lunar-mod-api")
         mcpMappings()
     }
     version("1.8.9")
@@ -28,6 +28,7 @@ repositories {
 dependencies {
     compileOnly("net.weavemc.mods:server-context:1.0.1")
     testImplementation("net.weavemc.mods:server-context:1.0.1")
+    compileOnly("net.weavemc.mods:lunar-mod-api:1.0.0")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
 

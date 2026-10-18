@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "fireball-indicator",
+            "name": "Fireball Indicator",
+            "description": "A ring around your crosshair that points toward every fireball you didn't throw. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/fireballindicator/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["hud"],
+            "enabledByDefault": true
+        }
+    ]
+}

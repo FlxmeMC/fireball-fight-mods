@@ -3,7 +3,6 @@ package net.weavemc.mods.endstone;
 import net.weavemc.mods.servercontext.ServerContext;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.util.ChatComponentText;
@@ -16,32 +15,15 @@ import net.weavemc.api.event.SubscribeEvent;
 import net.weavemc.api.event.TickEvent;
 import net.weavemc.mods.endstone.command.EndstoneCommand;
 
+import java.io.File;
 import java.lang.instrument.Instrumentation;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.function.Consumer;
 
 public final class EndstoneMod implements ModInitializer {
     private static final EndstoneCommand COMMAND = new EndstoneCommand();
-    private static EndstoneConfigStore configStore;
-    private KeyBinding toggleKey;
+    private static final String TOGGLE_HINT = "End Stone Glass: toggle it in Lunar's mod menu (Right Shift).";
+    private LegacyConfig legacyConfig;
     private boolean wasActive;
-
-    static boolean verifyEnabledPersistence() throws IOException {
-        Path directory = Files.createTempDirectory("weave-endstone-persistence-");
-        Path file = directory.resolve("endstone.properties");
-        try {
-            EndstoneConfigStore store = new EndstoneConfigStore(file);
-            store.saveEnabled(true);
-            boolean enabledReloaded = new EndstoneConfigStore(file).loadEnabled();
-            store.saveEnabled(false);
-            boolean disabledReloaded = !new EndstoneConfigStore(file).loadEnabled();
-            return enabledReloaded && disabledReloaded;
-        } finally {
-            Files.deleteIfExists(file);
-            Files.deleteIfExists(directory);
-        }
-    }
 
     @Override
     public void preInit(Instrumentation instrumentation) {
@@ -50,16 +32,46 @@ public final class EndstoneMod implements ModInitializer {
 
     @Override
     public void init() {
-        configStore = EndstoneConfigStore.inUserHome();
-        try {
-            EndstoneFeature.setEnabled(configStore.loadEnabled());
-            EndstoneFeature.setGlassMode(configStore.loadMode());
-        } catch (IOException exception) {
-            EndstoneFeature.setEnabled(false);
-            System.err.println("[Endstone Mod] Failed to load config: " + exception.getMessage());
-        }
+        EndstoneSettings.register();
+        importLegacyConfig();
+        EndstoneFeature.setGlassMode(EndstoneSettings.mode.get().featureMode);
+        // The tick handler notices the change and rebuilds chunks on the client thread.
+        EndstoneSettings.tile.onToggle(new Consumer<Boolean>() {
+            @Override
+            public void accept(Boolean enabled) {
+                EndstoneFeature.setEnabled(enabled.booleanValue());
+            }
+        });
+        EndstoneSettings.mode.onChange(new Consumer<EndstoneMode>() {
+            @Override
+            public void accept(EndstoneMode mode) {
+                EndstoneFeature.setGlassMode(mode.featureMode);
+                ServerContext.runOnClientThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (ServerContext.isAllowed() && EndstoneFeature.isEnabled()) {
+                            reloadChunks();
+                        }
+                    }
+                });
+            }
+        });
         CommandBus.register(COMMAND);
         EventBus.subscribe(this);
+    }
+
+    private void importLegacyConfig() {
+        legacyConfig = LegacyConfig.read(new File(System.getProperty("user.home"), ".weave/config/endstone-mod.properties"));
+        if (!legacyConfig.exists()) {
+            return;
+        }
+        EndstoneMode mode = EndstoneMode.fromFeatureMode(legacyConfig.get("mode"));
+        if (mode != null) {
+            // Kept unless Lunar already has a saved value for this setting.
+            EndstoneSettings.mode.set(mode);
+        }
+        System.out.println("[Endstone Mod] Imported the old Radius setting. The old on/off state is not "
+                + "imported; switch End Stone Glass on in Lunar's mod menu.");
     }
 
     @SubscribeEvent
@@ -67,56 +79,31 @@ public final class EndstoneMod implements ModInitializer {
         boolean active = ServerContext.isAllowed() && EndstoneFeature.isEnabled();
         if (active != wasActive) {
             wasActive = active;
-            Minecraft mc = Minecraft.getMinecraft();
-            if (mc != null && mc.theWorld != null && mc.renderGlobal != null) mc.renderGlobal.loadRenderers();
-        }
-        if (toggleKey == null) {
-            toggleKey = ModKeyBinding.tryRegister("Toggle Endstone Mod");
-        }
-        if (toggleKey == null) {
-            return;
-        }
-        while (toggleKey.isPressed()) {
-            toggleFeature();
+            reloadChunks();
         }
     }
 
-    public static void toggleFeature() {
-        if (!ServerContext.isAllowed()) { ServerContext.explainDisabled(); return; }
+    private static void reloadChunks() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.theWorld != null && mc.renderGlobal != null) mc.renderGlobal.loadRenderers();
+    }
+
+    /** The tile can only be switched from Lunar's menu, so the command explains where to find it. */
+    public static void showToggleHint() {
         ServerContext.runOnClientThread(new Runnable() {
-            @Override public void run() { toggleAllowedFeature(); }
+            @Override public void run() {
+                Minecraft minecraft = Minecraft.getMinecraft();
+                if (minecraft.thePlayer != null) {
+                    minecraft.thePlayer.addChatMessage(new ChatComponentText(TOGGLE_HINT));
+                }
+            }
         });
-    }
-
-    private static void toggleAllowedFeature() {
-        boolean enabled = !EndstoneFeature.isEnabled();
-        EndstoneFeature.setEnabled(enabled);
-        saveEnabledState();
-
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft.thePlayer != null) {
-            minecraft.thePlayer.addChatMessage(
-                    new ChatComponentText("End stone glass: " + (enabled ? "ON" : "OFF")));
-        }
-        if (minecraft.renderGlobal != null) {
-            minecraft.renderGlobal.loadRenderers();
-        }
     }
 
     @SubscribeEvent
     public void onShutdown(ShutdownEvent event) {
-        saveEnabledState();
-    }
-
-    private static void saveEnabledState() {
-        EndstoneConfigStore store = configStore;
-        if (store == null) {
-            return;
-        }
-        try {
-            store.saveEnabled(EndstoneFeature.isEnabled());
-        } catch (IOException exception) {
-            System.err.println("[Endstone Mod] Failed to save config: " + exception.getMessage());
+        if (legacyConfig != null) {
+            legacyConfig.retireIfImported();
         }
     }
 
