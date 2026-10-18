@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "net.weavemc.installer"
-version = "1.0.10"
+version = "1.0.14"
 
 repositories {
     mavenCentral()

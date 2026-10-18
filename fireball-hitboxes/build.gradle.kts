@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.weavemc.mods"
-version = "1.0.0"
+version = "1.1.0"
 
 weave {
     configure {
@@ -13,7 +13,7 @@ weave {
         modId = "fireball-hitboxes"
         entryPoints = listOf("net.weavemc.mods.fireballhitboxes.FireballHitboxesMod")
         hooks = listOf("net.weavemc.mods.fireballhitboxes.FireballRenderHook")
-        dependencies = listOf("minecraft", "java", "server-context")
+        dependencies = listOf("minecraft", "java", "server-context", "lunar-mod-api")
         mcpMappings()
     }
     version("1.8.9")
@@ -28,6 +28,7 @@ repositories {
 dependencies {
     compileOnly("net.weavemc.mods:server-context:1.0.1")
     testImplementation("net.weavemc.mods:server-context:1.0.1")
+    compileOnly("net.weavemc.mods:lunar-mod-api:1.0.0")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
     implementation("org.ow2.asm:asm-tree:9.9.1")

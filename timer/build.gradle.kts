@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.weavemc.mods.timer"
-version = "1.1.1"
+version = "1.2.0"
 
 weave {
     configure {
@@ -13,7 +13,7 @@ weave {
         modId = "timer"
         entryPoints = listOf("net.weavemc.mods.timer.TimerMod")
         mixinConfigs = listOf("timer.mixins.json")
-        dependencies = listOf("minecraft", "java", "server-context", "hud-editor")
+        dependencies = listOf("minecraft", "java", "server-context", "lunar-mod-api")
         mcpMappings()
     }
     version("1.8.9")
@@ -30,12 +30,13 @@ dependencies {
     testImplementation("net.weavemc.mods:server-context:1.0.1")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
-    compileOnly("net.weavemc.mods:hud-editor:1.0.0")
-    testImplementation("net.weavemc.mods:hud-editor:1.0.0")
+    compileOnly("net.weavemc.mods:lunar-mod-api:1.0.0")
+    testImplementation("net.weavemc.mods:lunar-mod-api:1.0.0")
     compileOnly("org.spongepowered:mixin:0.8.5")
     testImplementation("junit:junit:4.13.2")
     testImplementation(files(".gradle/weave/client-mcp-named.jar"))
     testRuntimeOnly("com.google.guava:guava:17.0")
+    testRuntimeOnly("com.google.code.gson:gson:2.2.4")
     testRuntimeOnly("org.apache.logging.log4j:log4j-api:2.0-beta9")
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.0-beta9")
 }

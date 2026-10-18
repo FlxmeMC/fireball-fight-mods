@@ -16,3 +16,9 @@ includeBuild("../server-context") {
         substitute(module("net.weavemc.mods:server-context")).using(project(":"))
     }
 }
+
+includeBuild("../lunar-mod-api") {
+    dependencySubstitution {
+        substitute(module("net.weavemc.mods:lunar-mod-api")).using(project(":"))
+    }
+}

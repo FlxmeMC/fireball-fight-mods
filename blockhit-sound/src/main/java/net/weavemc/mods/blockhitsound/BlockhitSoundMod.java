@@ -1,5 +1,6 @@
 package net.weavemc.mods.blockhitsound;
 
+import com.weave.lunarmods.LunarMods;
 import net.weavemc.mods.servercontext.ServerContext;
 
 import net.minecraft.client.Minecraft;
@@ -19,22 +20,31 @@ import net.weavemc.api.event.WorldEvent;
 
 public final class BlockhitSoundMod implements ModInitializer {
     private final BlockhitDetector detector = new BlockhitDetector();
-    private BlockhitConfig config;
+    private final LegacyConfig legacyConfig = LegacyConfig.atDefaultLocation();
 
     private Object lastSession;
 
     @Override
     public void init() {
-        config = BlockhitConfig.loadDefault();
-        config.save();
+        BlockhitSettings.register(legacyConfig.read(), new Runnable() {
+            @Override
+            public void run() {
+                // Lunar may run button actions on its UI thread.
+                runOnClientThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        playSound(Minecraft.getMinecraft());
+                    }
+                });
+            }
+        });
         EventBus.subscribe(this);
-        System.out.println("[Blockhit Sound] initialized with "
-                + config.getSound().getKey());
+        System.out.println("[Blockhit Sound] initialized");
     }
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
-        if (!ServerContext.isAllowed()) { resetDetection(); return; }
+        if (!isActive()) { resetDetection(); return; }
         Packet<?> packet = event.getPacket();
         if (packet instanceof S19PacketEntityStatus
                 && ((S19PacketEntityStatus) packet).getOpCode() == 2) {
@@ -88,7 +98,7 @@ public final class BlockhitSoundMod implements ModInitializer {
             resetDetection();
         }
         Minecraft minecraft = Minecraft.getMinecraft();
-        if (!ServerContext.isAllowed()) { resetDetection(); return; }
+        if (!isActive()) { resetDetection(); return; }
         detector.updateSwordBlocking(isSwordBlocking(minecraft));
     }
 
@@ -104,17 +114,28 @@ public final class BlockhitSoundMod implements ModInitializer {
 
     @SubscribeEvent
     public void onShutdown(ShutdownEvent event) {
-        config.save();
+        // Lunar now holds the imported values; keep the old file if Lunar never registered the tile.
+        if (LunarMods.isInLunarMenu()) {
+            legacyConfig.retire();
+        }
     }
 
     private void playConfiguredSound() {
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (!ServerContext.isAllowed() || minecraft == null || minecraft.thePlayer == null) {
+        if (isActive()) {
+            playSound(Minecraft.getMinecraft());
+        }
+    }
+
+    private static void playSound(Minecraft minecraft) {
+        if (minecraft == null || minecraft.thePlayer == null) {
             return;
         }
-        SoundDefinition sound = config.getSound();
-        minecraft.thePlayer.playSound(
-                sound.getEventName(), config.getVolume(), config.getPitch());
+        minecraft.thePlayer.playSound(BlockhitSettings.sound.get(),
+                BlockhitSettings.volume.get(), BlockhitSettings.pitch.get());
+    }
+
+    private static boolean isActive() {
+        return ServerContext.isAllowed() && BlockhitSettings.isEnabled();
     }
 
     private void resetDetection() {

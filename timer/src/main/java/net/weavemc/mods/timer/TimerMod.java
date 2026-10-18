@@ -10,16 +10,11 @@ import net.weavemc.api.command.CommandBus;
 import net.weavemc.api.event.ChatEvent;
 import net.weavemc.api.event.EventBus;
 import net.weavemc.api.event.PacketEvent;
-import net.weavemc.api.event.RenderGameOverlayEvent;
-import net.weavemc.api.event.ShutdownEvent;
 import net.weavemc.api.event.SubscribeEvent;
 import net.weavemc.api.event.WorldEvent;
-import net.weavemc.mods.hudeditor.HudElementRegistry;
 
 public final class TimerMod implements ModInitializer {
     private final TimerState state = new TimerState();
-    private TimerConfig config;
-    private TimerRenderer renderer;
     private static TimerCommand command;
 
     static boolean verifyServerMessageSecurity() {
@@ -42,11 +37,9 @@ public final class TimerMod implements ModInitializer {
 
     @Override
     public void init() {
-        config = TimerConfig.loadDefault();
-        renderer = new TimerRenderer(state, config);
+        TimerSettings.register(new TimerRenderer(state));
         command = new TimerCommand(state);
         CommandBus.register(command);
-        HudElementRegistry.register(new TimerHudElement(state, config));
         EventBus.subscribe(this);
         System.out.println("[Timer] initialized");
     }
@@ -103,18 +96,13 @@ public final class TimerMod implements ModInitializer {
     }
 
     @SubscribeEvent
-    public void onRender(RenderGameOverlayEvent.Post event) {
-        if (!ServerContext.isAllowed()) { clear(); return; }
-        if (!HudElementRegistry.isEditing()) {
-            renderer.render();
-        }
-    }
-
-    @SubscribeEvent
     public void onTick(net.weavemc.api.event.TickEvent.Pre event) {
         Object session = ServerContext.connectionId();
         if (lastSession != session) {
             lastSession = session;
+            clear();
+        }
+        if (!ServerContext.isAllowed() && state.isVisible()) {
             clear();
         }
     }
@@ -131,10 +119,5 @@ public final class TimerMod implements ModInitializer {
 
     private void clear() {
         state.reset();
-    }
-
-    @SubscribeEvent
-    public void onShutdown(ShutdownEvent event) {
-        config.save();
     }
 }

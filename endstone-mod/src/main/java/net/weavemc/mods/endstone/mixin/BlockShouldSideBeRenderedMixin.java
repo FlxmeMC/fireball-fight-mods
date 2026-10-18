@@ -21,7 +21,8 @@ public abstract class BlockShouldSideBeRenderedMixin {
     ) {
         // Vanilla's caller has already offset the current position by side.
         if (EndstoneFeature.shouldExposeFaceAgainst(world, suppliedNeighborPos)) {
-            callback.setReturnValue(true);
+            callback.setReturnValue(
+                    !EndstoneFeature.shouldHideFaceBetweenGhosts(world, suppliedNeighborPos, side));
         }
     }
 }

@@ -5,14 +5,14 @@ plugins {
 }
 
 group = "com.spawnprot.mod"
-version = "1.0.2"
+version = "1.1.0"
 
 weave {
     configure {
         name = "SpawnProt"
         modId = "spawnprot"
         entryPoints = listOf("com.spawnprot.mod.SpawnProtMod")
-        dependencies = listOf("minecraft", "java", "server-context", "hud-editor")
+        dependencies = listOf("minecraft", "java", "server-context", "lunar-mod-api")
         mcpMappings()
     }
     version("1.8.9")
@@ -28,7 +28,7 @@ dependencies {
     testImplementation("net.weavemc.mods:server-context:1.0.1")
     implementation("net.weavemc.api:api:1.3.3")
     implementation("net.weavemc.api:api-v1_8:1.3.3")
-    compileOnly("net.weavemc.mods:hud-editor:1.0.1")
+    compileOnly("net.weavemc.mods:lunar-mod-api:1.0.0")
     testImplementation("junit:junit:4.13.2")
 }
 

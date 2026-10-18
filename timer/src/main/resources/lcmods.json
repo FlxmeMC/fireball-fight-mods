@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "timer",
+            "name": "Timer",
+            "description": "Automatic match timer. Type /timer to start or stop it manually. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/timer/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["hud"],
+            "enabledByDefault": true
+        }
+    ]
+}

@@ -53,15 +53,13 @@ final class LauncherUpdater {
     }
 
     private static String downloadToFile(URI uri, Path target) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
-        connection.setConnectTimeout(15_000);
-        connection.setReadTimeout(180_000);
-        connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent", "Fireball-Fight-Mods/" + Main.VERSION);
+        String url = uri.toString();
+        HttpURLConnection connection = HttpConnections.connect(url, 15_000, 180_000);
         int status = connection.getResponseCode();
         if (status < 200 || status >= 300) {
+            ReleaseServerException failure = HttpConnections.statusFailure(connection, url);
             connection.disconnect();
-            throw new IOException("Update download failed with HTTP " + status + ".");
+            throw failure;
         }
         if (!"https".equalsIgnoreCase(connection.getURL().getProtocol())) {
             connection.disconnect();
@@ -79,6 +77,9 @@ final class LauncherUpdater {
                     digest.update(buffer, 0, read);
                 }
             }
+        } catch (IOException exception) {
+            InstallerLog.error("Update download failed for " + url, exception);
+            throw HttpConnections.describe(url, exception);
         } finally {
             connection.disconnect();
         }

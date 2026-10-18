@@ -1,0 +1,13 @@
+{
+    "mods": [
+        {
+            "id": "endstone-mod",
+            "name": "End Stone Glass",
+            "description": "Shows end stone near beds as glass so you can see through bed defenses. Unofficial mod by Fireball Fight Mods, not made or supported by Lunar Client.",
+            "icon": "assets/endstone/icon.png",
+            "creators": ["Fireball Fight Mods"],
+            "categories": ["mechanic"],
+            "enabledByDefault": false
+        }
+    ]
+}

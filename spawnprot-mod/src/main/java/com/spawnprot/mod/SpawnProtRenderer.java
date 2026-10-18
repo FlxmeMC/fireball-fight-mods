@@ -1,62 +1,93 @@
 package com.spawnprot.mod;
 
+import com.weave.lunarmods.HudRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.renderer.GlStateManager;
+import net.weavemc.mods.servercontext.ServerContext;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public final class SpawnProtRenderer {
+/** Draws the countdown panels as Lunar's HUD element; Lunar has already applied its position and size. */
+public final class SpawnProtRenderer implements HudRenderer {
     private static final int LINE_HEIGHT = 10;
     private static final int PANEL_GAP = 4;
     private static final int COLOR_WHITE = 0xFFFFFF;
+    /** The text shadow is drawn one pixel right of and below the text. */
+    private static final float SHADOW = 1.0F;
+    private static final String[] PREVIEW = {"§cOpponent DIED!", "§eRespawning in §d3.0"};
 
-    public void onRenderOverlay() {
-        if (!SpawnProtState.shouldRender()) {
+    @Override
+    public float width(boolean editing) {
+        FontRenderer font = font();
+        if (font == null) {
+            return 0.0F;
+        }
+        int widest = 0;
+        for (String[] panel : panels(editing)) {
+            for (String line : panel) {
+                widest = Math.max(widest, font.getStringWidth(line));
+            }
+        }
+        return widest == 0 ? 0.0F : widest + SHADOW;
+    }
+
+    @Override
+    public float height(boolean editing) {
+        FontRenderer font = font();
+        int count = panels(editing).size();
+        if (font == null || count == 0) {
+            return 0.0F;
+        }
+        // Each panel is two lines; the last line's glyphs are FONT_HEIGHT tall plus the shadow.
+        return count * (LINE_HEIGHT * 2 + PANEL_GAP) - PANEL_GAP - LINE_HEIGHT + font.FONT_HEIGHT + SHADOW;
+    }
+
+    @Override
+    public void render(float x, float y, boolean editing) {
+        FontRenderer font = font();
+        if (font == null) {
             return;
         }
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft == null || minecraft.fontRendererObj == null) {
-            return;
-        }
-
-        FontRenderer fontRenderer = minecraft.fontRendererObj;
-        GlStateManager.pushMatrix();
-        try {
-            GlStateManager.translate(SpawnProtState.hudX, SpawnProtState.hudY, 0.0F);
-            GlStateManager.scale(SpawnProtState.hudScale, SpawnProtState.hudScale, 1.0F);
-            float y = 0.0F;
-            if (SpawnProtState.hasSelfSpawnProt()) {
-                String countdown = SpawnProtState.formatCountdown(
-                        SpawnProtState.getSelfSpawnProtSecondsRemaining());
-                y = drawPanel(fontRenderer,
-                        "\u00A7aYour Spawn Protection",
-                        "\u00A7eExpires in: \u00A7d" + countdown, y);
-            }
-
-            List<SpawnProtState.TrackedPlayer> players = SpawnProtState.getActiveTrackedPlayers();
-            for (SpawnProtState.TrackedPlayer player : players) {
-                String countdown = SpawnProtState.formatCountdown(
-                        SpawnProtState.getSecondsRemaining(player));
-                if (player.phase == SpawnProtState.Phase.RESPAWNING) {
-                    String deathColor = player.teammate ? "\u00A7a" : "\u00A7c";
-                    y = drawPanel(fontRenderer,
-                            deathColor + player.name + " DIED!",
-                            "\u00A7eRespawning in \u00A7d" + countdown, y);
-                } else if (player.phase == SpawnProtState.Phase.SPAWN_PROT) {
-                    y = drawPanel(fontRenderer,
-                            "\u00A7a" + player.name + " Spawn Protection",
-                            "\u00A7eExpires in: \u00A7d" + countdown, y);
-                }
-            }
-        } finally {
-            GlStateManager.popMatrix();
+        float lineY = y;
+        for (String[] panel : panels(editing)) {
+            font.drawStringWithShadow(panel[0], x, lineY, COLOR_WHITE);
+            font.drawStringWithShadow(panel[1], x, lineY + LINE_HEIGHT, COLOR_WHITE);
+            lineY += LINE_HEIGHT * 2 + PANEL_GAP;
         }
     }
 
-    private static float drawPanel(FontRenderer fontRenderer, String first, String second, float y) {
-        fontRenderer.drawStringWithShadow(first, 0.0F, y, COLOR_WHITE);
-        fontRenderer.drawStringWithShadow(second, 0.0F, y + LINE_HEIGHT, COLOR_WHITE);
-        return y + LINE_HEIGHT * 2 + PANEL_GAP;
+    /** The live panels, a sample in the HUD editor when there are none, or nothing at all. */
+    private static List<String[]> panels(boolean editing) {
+        List<String[]> panels = new ArrayList<String[]>();
+        if (ServerContext.isAllowed() && SpawnProtState.shouldRender()) {
+            if (SpawnProtState.hasSelfSpawnProt()) {
+                String countdown = SpawnProtState.formatCountdown(
+                        SpawnProtState.getSelfSpawnProtSecondsRemaining());
+                panels.add(new String[] {
+                        "§aYour Spawn Protection", "§eExpires in: §d" + countdown});
+            }
+            for (SpawnProtState.TrackedPlayer player : SpawnProtState.getActiveTrackedPlayers()) {
+                String countdown = SpawnProtState.formatCountdown(
+                        SpawnProtState.getSecondsRemaining(player));
+                if (player.phase == SpawnProtState.Phase.RESPAWNING) {
+                    String deathColor = player.teammate ? "§a" : "§c";
+                    panels.add(new String[] {
+                            deathColor + player.name + " DIED!", "§eRespawning in §d" + countdown});
+                } else if (player.phase == SpawnProtState.Phase.SPAWN_PROT) {
+                    panels.add(new String[] {
+                            "§a" + player.name + " Spawn Protection", "§eExpires in: §d" + countdown});
+                }
+            }
+        }
+        if (panels.isEmpty() && editing) {
+            panels.add(PREVIEW);
+        }
+        return panels;
+    }
+
+    private static FontRenderer font() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        return minecraft == null ? null : minecraft.fontRendererObj;
     }
 }

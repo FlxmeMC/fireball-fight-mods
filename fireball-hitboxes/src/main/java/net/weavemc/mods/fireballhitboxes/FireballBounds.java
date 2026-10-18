@@ -11,6 +11,7 @@ public final class FireballBounds {
     public static AxisAlignedBB forDebugRender(Entity entity) {
         AxisAlignedBB bounds = entity.getEntityBoundingBox();
         return entity instanceof EntityFireball && entity.canBeCollidedWith() && ServerContext.isAllowed()
+                && FireballHitboxesSettings.isEnabled()
                 ? expand(bounds, entity.getCollisionBorderSize()) : bounds;
     }
 

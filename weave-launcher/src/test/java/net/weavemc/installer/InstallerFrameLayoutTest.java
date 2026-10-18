@@ -13,42 +13,36 @@ import java.lang.reflect.Constructor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public final class InstallerFrameLayoutTest {
     @Test
-    public void checkboxAndSettingsUseOneRightEdgeAcrossCards() throws Exception {
-        JPanel withSettings = createCard(true);
-        JPanel withoutSettings = createCard(false);
+    public void cardsHaveOnlyACheckboxAlignedToTheSameRightEdge() throws Exception {
+        JPanel timer = createCard("timer", "Timer");
+        JPanel blockhit = createCard("blockhit-sound", "Blockhit Sound");
 
-        layoutTree(withSettings, 364, 140);
-        layoutTree(withoutSettings, 364, 140);
+        layoutTree(timer, 364, 140);
+        layoutTree(blockhit, 364, 140);
 
-        JCheckBox settingsCheckbox = find(withSettings, JCheckBox.class, null);
-        JButton settingsButton = find(withSettings, JButton.class, "Settings");
-        JCheckBox plainCheckbox = find(withoutSettings, JCheckBox.class, null);
-        assertNotNull(settingsCheckbox);
-        assertNotNull(settingsButton);
-        assertNotNull(plainCheckbox);
-
-        int expectedRight = rightEdge(settingsButton, withSettings);
-        assertEquals(expectedRight, rightEdge(settingsCheckbox, withSettings));
-        assertEquals(expectedRight, rightEdge(plainCheckbox, withoutSettings));
+        JCheckBox timerCheckbox = find(timer, JCheckBox.class, null);
+        JCheckBox blockhitCheckbox = find(blockhit, JCheckBox.class, null);
+        assertNotNull(timerCheckbox);
+        assertNotNull(blockhitCheckbox);
+        assertNull(find(blockhit, JButton.class, "Settings"));
+        assertEquals(rightEdge(timerCheckbox, timer), rightEdge(blockhitCheckbox, blockhit));
     }
 
-    private static JPanel createCard(boolean settings) throws Exception {
+    private static JPanel createCard(String id, String name) throws Exception {
         ReleaseManifest.ModInfo mod = new ReleaseManifest.ModInfo();
-        mod.id = "timer";
-        mod.name = "Timer";
+        mod.id = id;
+        mod.name = name;
         mod.version = "1.0.0";
-        mod.description = "Automatic match timer";
+        mod.description = "Fixture";
         Class<?> type = Class.forName("net.weavemc.installer.InstallerFrame$ModCard");
         Constructor<?> constructor = type.getDeclaredConstructor(
-                ReleaseManifest.ModInfo.class, Runnable.class, Runnable.class);
+                ReleaseManifest.ModInfo.class, Runnable.class);
         constructor.setAccessible(true);
-        Runnable settingsAction = settings ? new Runnable() {
-            @Override public void run() { }
-        } : null;
-        return (JPanel) constructor.newInstance(mod, settingsAction, new Runnable() {
+        return (JPanel) constructor.newInstance(mod, new Runnable() {
             @Override public void run() { }
         });
     }

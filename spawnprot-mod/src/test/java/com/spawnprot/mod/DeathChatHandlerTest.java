@@ -2,6 +2,8 @@ package com.spawnprot.mod;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertFalse;
@@ -47,5 +49,15 @@ public final class DeathChatHandlerTest {
         assertTrue(DeathChatHandler.sameTeamColor("9", "1"));
         assertFalse(DeathChatHandler.sameTeamColor("c", "9"));
         assertFalse(DeathChatHandler.sameTeamColor(null, "9"));
+    }
+
+    @Test
+    public void rejectsDeathsOfOurOwnDisguise() {
+        assertNull(DeathChatHandler.serverDeathInfo(
+                "§cMaskedName fell into the void!", "xFlxme",
+                Arrays.asList("MaskedName")));
+        assertEquals("Alex", DeathChatHandler.serverDeathInfo(
+                "§cAlex fell into the void!", "xFlxme",
+                Arrays.asList("MaskedName")).playerName);
     }
 }

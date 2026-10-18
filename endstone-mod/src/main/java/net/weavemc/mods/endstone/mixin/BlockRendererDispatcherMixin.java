@@ -8,6 +8,7 @@ import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.util.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.weavemc.mods.endstone.EndstoneFeature;
+import net.weavemc.mods.endstone.GlassAppearance;
 import net.weavemc.mods.endstone.GlassLightingBlockAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -36,10 +37,19 @@ public abstract class BlockRendererDispatcherMixin {
                 ? new GlassLightingBlockAccess(blockAccess, pos)
                 : null;
         if (glassAccess != null && glassAccess.isVisualGlass(pos)) {
-            IBakedModel glassModel = EndstoneFeature.getGlassModel();
-            if (glassModel != null) {
-                model = glassModel;
-                renderState = net.minecraft.init.Blocks.glass.getDefaultState();
+            if (EndstoneFeature.isGhostMode()) {
+                // The pack's glass texture is invisible: keep the endstone
+                // state (so its face culling applies) and draw it faded.
+                IBakedModel ghostModel = GlassAppearance.getGhostEndstoneModel();
+                if (ghostModel != null) {
+                    model = ghostModel;
+                }
+            } else {
+                IBakedModel glassModel = EndstoneFeature.getGlassModel();
+                if (glassModel != null) {
+                    model = glassModel;
+                    renderState = net.minecraft.init.Blocks.glass.getDefaultState();
+                }
             }
         }
 

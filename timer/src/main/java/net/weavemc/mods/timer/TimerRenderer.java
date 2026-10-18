@@ -1,65 +1,72 @@
 package net.weavemc.mods.timer;
 
+import com.weave.lunarmods.HudRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import net.weavemc.mods.servercontext.ServerContext;
 
-final class TimerRenderer {
+/** Draws the timer as Lunar's HUD element; Lunar has already applied its position and size. */
+final class TimerRenderer implements HudRenderer {
     private static final int CLOCK_COLOR = 0xFFFFFF;
     private static final int DECIMAL_COLOR = 0xB8B8B8;
     private static final float DECIMAL_SCALE = 0.75F;
+    /** The text shadow is drawn one pixel right of and below the text. */
+    private static final float SHADOW = 1.0F;
 
     private final TimerState state;
-    private final TimerConfig config;
 
-    TimerRenderer(TimerState state, TimerConfig config) {
+    TimerRenderer(TimerState state) {
         this.state = state;
-        this.config = config;
     }
 
-    void render() {
-        if (!state.isVisible()) {
-            return;
+    @Override
+    public float width(boolean editing) {
+        TimerText text = textToShow(editing);
+        FontRenderer font = font();
+        if (text == null || font == null) {
+            return 0.0F;
         }
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft == null || minecraft.thePlayer == null || minecraft.fontRendererObj == null) {
-            return;
-        }
+        return font.getStringWidth(text.getClock())
+                + font.getStringWidth(text.getDecimals()) * DECIMAL_SCALE + SHADOW;
+    }
 
-        FontRenderer font = minecraft.fontRendererObj;
-        TimerText text = TimerText.fromMillis(state.elapsedMillis());
+    @Override
+    public float height(boolean editing) {
+        FontRenderer font = font();
+        return textToShow(editing) == null || font == null ? 0.0F : font.FONT_HEIGHT + SHADOW;
+    }
+
+    @Override
+    public void render(float x, float y, boolean editing) {
+        TimerText text = textToShow(editing);
+        FontRenderer font = font();
+        if (text == null || font == null) {
+            return;
+        }
         float clockWidth = font.getStringWidth(text.getClock());
-        float decimalsWidth = font.getStringWidth(text.getDecimals()) * DECIMAL_SCALE;
-        float contentWidth = clockWidth + decimalsWidth;
-        float contentHeight = font.FONT_HEIGHT;
-        float scale = config.getScale();
-        ScaledResolution screen = new ScaledResolution(minecraft);
-        float x = clamp(config.getX(), 0.0F,
-                Math.max(0.0F, screen.getScaledWidth() - contentWidth * scale));
-        float y = clamp(config.getY(), 0.0F,
-                Math.max(0.0F, screen.getScaledHeight() - contentHeight * scale));
-
+        font.drawStringWithShadow(text.getClock(), x, y, CLOCK_COLOR);
         GlStateManager.pushMatrix();
         try {
-            GlStateManager.translate(x, y, 0.0F);
-            GlStateManager.scale(scale, scale, 1.0F);
-            font.drawStringWithShadow(text.getClock(), 0.0F, 0.0F, CLOCK_COLOR);
-            GlStateManager.pushMatrix();
-            try {
-                float decimalBaseline = font.FONT_HEIGHT * (1.0F - DECIMAL_SCALE);
-                GlStateManager.translate(clockWidth, decimalBaseline, 0.0F);
-                GlStateManager.scale(DECIMAL_SCALE, DECIMAL_SCALE, 1.0F);
-                font.drawStringWithShadow(text.getDecimals(), 0.0F, 0.0F, DECIMAL_COLOR);
-            } finally {
-                GlStateManager.popMatrix();
-            }
+            float decimalBaseline = font.FONT_HEIGHT * (1.0F - DECIMAL_SCALE);
+            GlStateManager.translate(x + clockWidth, y + decimalBaseline, 0.0F);
+            GlStateManager.scale(DECIMAL_SCALE, DECIMAL_SCALE, 1.0F);
+            font.drawStringWithShadow(text.getDecimals(), 0.0F, 0.0F, DECIMAL_COLOR);
         } finally {
             GlStateManager.popMatrix();
         }
     }
 
-    private static float clamp(float value, float minimum, float maximum) {
-        return Math.max(minimum, Math.min(maximum, value));
+    /** The running clock, a zeroed preview in the HUD editor, or null when nothing should show. */
+    private TimerText textToShow(boolean editing) {
+        if (ServerContext.isAllowed() && state.isVisible()) {
+            return TimerText.fromMillis(state.elapsedMillis());
+        }
+        return editing ? TimerText.fromMillis(0L) : null;
+    }
+
+    private static FontRenderer font() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        return minecraft == null ? null : minecraft.fontRendererObj;
     }
 }

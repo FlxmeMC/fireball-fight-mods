@@ -6,8 +6,6 @@ import com.google.gson.GsonBuilder;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -19,8 +17,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
-import java.util.Properties;
 import java.util.Set;
 
 final class InstallService {
@@ -43,20 +41,28 @@ final class InstallService {
     }
 
     boolean isInstalled() {
-        return Files.isRegularFile(installRoot.resolve("loader.jar"));
+        if (Files.isRegularFile(installRoot.resolve("loader.jar"))
+                || Files.isRegularFile(installRoot.resolve("installed-release.json"))) return true;
+        try {
+            return !ManagedMods.destinations(installRoot).isEmpty();
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     boolean isLunarRunning() throws IOException, InterruptedException {
-        String script = "$p=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ? {"
+        String script = "$ErrorActionPreference='Stop'; $p=@(Get-CimInstance Win32_Process | ? {"
                 + "$_.Name -eq 'Lunar Client.exe' -or "
                 + "(($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and "
                 + "$_.CommandLine -match '(?i)lunarclient|\\.lunarclient')}); "
                 + "if($p.Count -gt 0){exit 10}else{exit 0}";
-        return runPowerShell(script) == 10;
+        int exit = runPowerShell(script);
+        if (exit != 0 && exit != 10) throw new IOException("Could not check whether Lunar Client is running.");
+        return exit == 10;
     }
 
     void closeLunar() throws IOException, InterruptedException {
-        String script = "$p=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ? {"
+        String script = "$ErrorActionPreference='Stop'; $p=@(Get-CimInstance Win32_Process | ? {"
                 + "$_.Name -eq 'Lunar Client.exe' -or "
                 + "(($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and "
                 + "$_.CommandLine -match '(?i)lunarclient|\\.lunarclient')}); "
@@ -65,32 +71,16 @@ final class InstallService {
         if (runPowerShell(script) != 0) {
             throw new IOException("Could not close Lunar Client.");
         }
-    }
-
-    InstallSettings loadSettings() {
-        InstallSettings settings = InstallSettings.defaults();
-        try {
-            Properties blockhit = readProperties(installRoot.resolve("config")
-                    .resolve("blockhit-sound.properties"));
-            String sound = blockhit.getProperty("sound", settings.blockhitSound).trim();
-            settings.blockhitSound = "anvil_place".equalsIgnoreCase(sound)
-                    ? InstallSettings.DEFAULT_SOUND : sound;
-            settings.blockhitPitch = parsePitch(
-                    blockhit.getProperty("pitch"), settings.blockhitPitch);
-
-            Properties endstone = readProperties(installRoot.resolve("config")
-                    .resolve("endstone-mod.properties"));
-            settings.endstoneMode = validEndstoneMode(
-                    endstone.getProperty("mode", settings.endstoneMode));
-        } catch (IOException ignored) {
-            return InstallSettings.defaults();
+        for (int attempt = 0; attempt < 10; attempt++) {
+            if (!isLunarRunning()) return;
+            Thread.sleep(500);
         }
-        return settings;
+        throw new IOException("Lunar Client is still running. Close the launcher and game before continuing.");
     }
 
-    void install(ReleaseManifest manifest, Set<String> selectedMods,
-                 InstallSettings settings, Progress progress)
+    void install(ReleaseManifest manifest, Set<String> selectedMods, Progress progress)
             throws Exception {
+        List<String> previousDestinations = readInstalledDestinations();
         Set<String> components = resolveComponents(manifest, selectedMods);
         List<ReleaseManifest.FileInfo> selectedFiles = new ArrayList<ReleaseManifest.FileInfo>();
         for (ReleaseManifest.FileInfo file : manifest.files) {
@@ -135,7 +125,14 @@ final class InstallService {
         }
 
         removeDeselected(manifest, selectedFiles);
-        saveSettings(selectedMods, settings);
+        removeObsolete(manifest, previousDestinations);
+        Set<String> retained = new HashSet<String>();
+        for (ReleaseManifest.FileInfo file : selectedFiles) {
+            retained.add(normalizeDestination(file.destination));
+        }
+        for (String previous : ManagedMods.destinations(installRoot)) {
+            if (!retained.contains(previous)) deleteManagedFile(previous);
+        }
         progress.update(85, "Configuring Lunar 1.8.9...");
         profiles.configure(installRoot, lunarRoot, false);
 
@@ -154,102 +151,32 @@ final class InstallService {
         progress.log("Installed Weave " + manifest.releaseVersion + " successfully.");
     }
 
-    void saveSettings(Set<String> selectedMods, InstallSettings settings)
-            throws IOException {
-        if (selectedMods.contains("blockhit-sound")) {
-            String sound = settings.blockhitSound == null
-                    ? "" : settings.blockhitSound.trim();
-            if (!sound.matches("[a-zA-Z0-9_.:-]+")) {
-                throw new IOException("Choose a valid Minecraft sound event.");
-            }
-            double pitch = parsePitch(Double.toString(settings.blockhitPitch),
-                    InstallSettings.DEFAULT_PITCH);
-            Path file = installRoot.resolve("config").resolve("blockhit-sound.properties");
-            Properties properties = readProperties(file);
-            properties.setProperty("sound", sound);
-            properties.setProperty("pitch", String.format(Locale.ROOT, "%.2f", pitch));
-            writeProperties(file, properties, "Blockhit Sound Config");
-        }
-        if (selectedMods.contains("endstone-mod")) {
-            Path file = installRoot.resolve("config").resolve("endstone-mod.properties");
-            Properties properties = readProperties(file);
-            properties.setProperty("mode", validEndstoneMode(settings.endstoneMode));
-            writeProperties(file, properties, "Endstone Mod Config");
-        }
-    }
-
-    private static Properties readProperties(Path file) throws IOException {
-        Properties properties = new Properties();
-        if (Files.isRegularFile(file)) {
-            try (InputStream input = Files.newInputStream(file)) {
-                properties.load(input);
-            }
-        }
-        return properties;
-    }
-
-    private static void writeProperties(Path file, Properties properties, String heading)
-            throws IOException {
-        Files.createDirectories(file.getParent());
-        Path temporary = file.resolveSibling("." + file.getFileName()
-                + ".installing-" + System.nanoTime());
-        try {
-            try (OutputStream output = Files.newOutputStream(temporary,
-                    StandardOpenOption.CREATE_NEW)) {
-                properties.store(output, heading);
-            }
-            moveAtomically(temporary, file);
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    private static double parsePitch(String value, double fallback) {
-        if (value == null) {
-            return fallback;
-        }
-        try {
-            double parsed = Double.parseDouble(value);
-            return Double.isFinite(parsed) && parsed >= 0.5D && parsed <= 2.0D
-                    ? parsed : fallback;
-        } catch (NumberFormatException ignored) {
-            return fallback;
-        }
-    }
-
-    private static String validEndstoneMode(String mode) {
-        if (InstallSettings.ENDSTONE_RADIUS_3.equals(mode)
-                || InstallSettings.ENDSTONE_ALWAYS.equals(mode)) {
-            return mode;
-        }
-        return InstallSettings.ENDSTONE_RADIUS_5;
-    }
-
     void uninstall(Progress progress) throws Exception {
         progress.update(10, "Removing Lunar JVM argument...");
         if (Files.isRegularFile(lunarRoot.resolve("db").resolve("profiles.db"))) {
             profiles.configure(installRoot, lunarRoot, true);
         }
-        List<String> destinations = readInstalledDestinations();
-        if (destinations.isEmpty()) {
-            Collections.addAll(destinations,
-                    "loader.jar", "mods/1.8.9/blockhit-sound.jar",
-                    "mods/1.8.9/endstone-mod.jar", "mods/1.8.9/hud-editor.jar",
-                    "mods/1.8.9/spawnprot-mod.jar", "mods/1.8.9/timer.jar",
-                    "mods/1.8.9/server-context.jar", "mods/1.8.9/fireball-hitboxes.jar",
-                    "mods/1.8.9/weave-disclosure.jar");
-        }
+        Set<String> destinations = new LinkedHashSet<String>(readInstalledDestinations());
+        destinations.add("loader.jar");
+        destinations.addAll(ManagedMods.destinations(installRoot));
         int index = 0;
         for (String destination : destinations) {
             index++;
             progress.update(20 + (int) (70.0 * index / destinations.size()),
                     "Removing managed files...");
-            Files.deleteIfExists(safeDestination(destination));
-            Files.deleteIfExists(safeDestination(destination + ".sha256"));
+            // Install records from older installers may also list settings or helper files.
+            if ("loader.jar".equals(destination) || isRemovableModFile(destination)) {
+                deleteManagedFile(destination);
+            }
         }
         Files.deleteIfExists(installRoot.resolve("installed-release.json"));
         progress.update(100, "Uninstall complete");
         progress.log("Weave was removed. Settings and backups were preserved.");
+    }
+
+    private void deleteManagedFile(String destination) throws IOException {
+        Files.deleteIfExists(safeDestination(destination));
+        Files.deleteIfExists(safeDestination(destination + ".sha256"));
     }
 
     private Set<String> resolveComponents(ReleaseManifest manifest, Set<String> selected) {
@@ -277,9 +204,57 @@ final class InstallService {
         for (ReleaseManifest.FileInfo file : manifest.files) {
             if (file.destination != null
                     && !selected.contains(file.destination.replace('\\', '/'))) {
-                Files.deleteIfExists(safeDestination(file.destination));
+                deleteManagedFile(file.destination);
             }
         }
+    }
+
+    /**
+     * Removes mod jars an earlier release installed that the new release no longer ships at all,
+     * such as a retired library, so they stop loading. Only jars (and their checksums) under
+     * mods/ are touched; config and mod data are never removed.
+     */
+    private void removeObsolete(ReleaseManifest manifest, List<String> previousDestinations)
+            throws IOException {
+        Set<String> shipped = new HashSet<String>();
+        for (ReleaseManifest.FileInfo file : manifest.files) {
+            if (file.destination != null) {
+                shipped.add(normalizeDestination(file.destination));
+            }
+        }
+        for (String previous : previousDestinations) {
+            String normalized = normalizeDestination(previous);
+            if (shipped.contains(normalized) || !isRemovableModFile(normalized)) {
+                continue;
+            }
+            Path destination;
+            try {
+                destination = safeDestination(normalized);
+            } catch (IOException unsafe) {
+                continue;
+            }
+            Files.deleteIfExists(destination);
+            if (normalized.toLowerCase(Locale.ROOT).endsWith(".jar")) {
+                Files.deleteIfExists(safeDestination(normalized + ".sha256"));
+            }
+        }
+    }
+
+    static boolean isRemovableModFile(String destination) {
+        String normalized = normalizeDestination(destination);
+        if (!normalized.startsWith("mods/") || normalized.contains("..")) {
+            return false;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".jar") || lower.endsWith(".jar.sha256");
+    }
+
+    private static String normalizeDestination(String destination) {
+        String normalized = destination.trim().replace('\\', '/');
+        while (normalized.startsWith("./")) {
+            normalized = normalized.substring(2);
+        }
+        return normalized;
     }
 
     private List<String> readInstalledDestinations() {

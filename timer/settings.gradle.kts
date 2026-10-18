@@ -11,9 +11,9 @@ plugins {
 
 rootProject.name = "timer"
 
-includeBuild("../hud-editor") {
+includeBuild("../lunar-mod-api") {
     dependencySubstitution {
-        substitute(module("net.weavemc.mods:hud-editor")).using(project(":"))
+        substitute(module("net.weavemc.mods:lunar-mod-api")).using(project(":"))
     }
 }
 
