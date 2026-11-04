@@ -1,6 +1,6 @@
 {
-  "appVersion": "1.0.11",
-  "installerVersion": "1.0.14",
+  "appVersion": "1.0.12",
+  "installerVersion": "1.0.15",
   "components": {
     "loader": "1.0.0",
     "blockhit-sound": "1.1.0",

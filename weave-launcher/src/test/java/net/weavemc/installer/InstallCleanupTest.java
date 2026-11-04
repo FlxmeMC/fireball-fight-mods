@@ -83,6 +83,8 @@ public final class InstallCleanupTest {
         }
         Path oldSound = jar(root.resolve("mods/blockhit-old.jar"), "blockhit-sound");
         Path deselected = jar(root.resolve("mods/1.8.9/timer-old.jar"), "timer");
+        Path retired = jar(root.resolve("mods/1.8.9/fireball-indicator.jar"), "fireball-indicator");
+        Files.write(root.resolve("mods/1.8.9/fireball-indicator.jar.sha256"), new byte[] {1});
         Path unrelated = jar(root.resolve("mods/unrelated.jar"), "other");
         Path snapshot = temporary.newFolder("snapshot").toPath();
         Path source = jar(snapshot.resolve("sound.jar"), "blockhit-sound");
@@ -104,6 +106,8 @@ public final class InstallCleanupTest {
         new InstallService().install(manifest, Collections.singleton("blockhit-sound"), PROGRESS);
         assertFalse(Files.exists(oldSound));
         assertFalse(Files.exists(deselected));
+        assertFalse(Files.exists(retired));
+        assertFalse(Files.exists(root.resolve("mods/1.8.9/fireball-indicator.jar.sha256")));
         assertTrue(Files.exists(unrelated));
         assertArrayEquals(Files.readAllBytes(source), Files.readAllBytes(root.resolve(file.destination)));
         InstallService.InstalledRecord record = new Gson().fromJson(new String(

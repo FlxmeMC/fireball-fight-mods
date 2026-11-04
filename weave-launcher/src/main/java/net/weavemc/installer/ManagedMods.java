@@ -19,6 +19,8 @@ import java.util.jar.JarFile;
 
 /** Only this pack's binaries in directories actually searched by the 1.8.9 loader. */
 final class ManagedMods {
+    // Retired ids (hud-editor, spawn-protection-tracker, fireball-indicator) stay listed so
+    // updates and uninstalls delete copies that older releases installed.
     private static final Set<String> IDS = new HashSet<String>(Arrays.asList(
             "blockhit-sound", "endstone-mod", "hud-editor", "spawnprot-mod",
             "spawn-protection-tracker", "timer", "server-context", "fireball-hitboxes",
