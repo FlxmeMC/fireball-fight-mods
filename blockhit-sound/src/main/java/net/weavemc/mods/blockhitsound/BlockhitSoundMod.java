@@ -4,12 +4,7 @@ import com.weave.lunarmods.LunarMods;
 import net.weavemc.mods.servercontext.ServerContext;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.entity.Entity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemSword;
 import net.minecraft.network.Packet;
-import net.minecraft.network.play.server.S12PacketEntityVelocity;
-import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.weavemc.api.ModInitializer;
 import net.weavemc.api.event.EventBus;
 import net.weavemc.api.event.PacketEvent;
@@ -19,7 +14,12 @@ import net.weavemc.api.event.TickEvent;
 import net.weavemc.api.event.WorldEvent;
 
 public final class BlockhitSoundMod implements ModInitializer {
-    private final BlockhitDetector detector = new BlockhitDetector();
+    private final CombatSampler sampler = new CombatSampler(new Runnable() {
+        @Override
+        public void run() {
+            playConfiguredSound();
+        }
+    });
     private final LegacyConfig legacyConfig = LegacyConfig.atDefaultLocation();
 
     private Object lastSession;
@@ -44,62 +44,34 @@ public final class BlockhitSoundMod implements ModInitializer {
 
     @SubscribeEvent
     public void onPacketReceive(PacketEvent.Receive event) {
-        if (!isActive()) { resetDetection(); return; }
-        Packet<?> packet = event.getPacket();
-        if (packet instanceof S19PacketEntityStatus
-                && ((S19PacketEntityStatus) packet).getOpCode() == 2) {
-            handleHurtStatus((S19PacketEntityStatus) packet);
-        } else if (packet instanceof S12PacketEntityVelocity) {
-            handleVelocity((S12PacketEntityVelocity) packet);
+        // Netty thread: never touch detection state here. onTick resets when inactive.
+        if (!isActive()) {
+            return;
         }
-    }
-
-    private void handleHurtStatus(final S19PacketEntityStatus status) {
+        final Packet<?> packet = event.getPacket();
+        if (!CombatSampler.accepts(packet)) {
+            return;
+        }
+        // Queued ahead of vanilla's own handler for this packet, so the sampler sees pre-packet state.
         runOnClientThread(new Runnable() {
             @Override
             public void run() {
-                Minecraft minecraft = Minecraft.getMinecraft();
-                if (minecraft == null || minecraft.theWorld == null) {
-                    return;
-                }
-                Entity target = status.getEntity(minecraft.theWorld);
-                boolean swordBlocking = isSwordBlocking(minecraft);
-                detector.updateSwordBlocking(swordBlocking);
-                if (target == minecraft.thePlayer
-                        && detector.recordLocalHurt(System.nanoTime())) {
-                    playConfiguredSound();
-                }
-            }
-        });
-    }
-
-    private void handleVelocity(final S12PacketEntityVelocity velocity) {
-        runOnClientThread(new Runnable() {
-            @Override
-            public void run() {
-                Minecraft minecraft = Minecraft.getMinecraft();
-                if (minecraft == null || minecraft.thePlayer == null
-                        || velocity.getEntityID() != minecraft.thePlayer.getEntityId()) {
-                    return;
-                }
-                detector.updateSwordBlocking(isSwordBlocking(minecraft));
-                if (detector.recordLocalVelocity(System.nanoTime())) {
-                    playConfiguredSound();
+                if (isActive()) {
+                    sampler.handle(packet);
                 }
             }
         });
     }
 
     @SubscribeEvent
-    public void onTick(TickEvent.Pre event) {
+    public void onTick(TickEvent.Post event) {
         Object session = ServerContext.connectionId();
         if (lastSession != session) {
             lastSession = session;
             resetDetection();
         }
-        Minecraft minecraft = Minecraft.getMinecraft();
         if (!isActive()) { resetDetection(); return; }
-        detector.updateSwordBlocking(isSwordBlocking(minecraft));
+        sampler.tick();
     }
 
     @SubscribeEvent
@@ -139,17 +111,7 @@ public final class BlockhitSoundMod implements ModInitializer {
     }
 
     private void resetDetection() {
-        detector.reset();
-    }
-
-    private static boolean isSwordBlocking(Minecraft minecraft) {
-        return minecraft != null && minecraft.thePlayer != null
-                && minecraft.thePlayer.isBlocking()
-                && isSword(minecraft.thePlayer.getHeldItem());
-    }
-
-    private static boolean isSword(ItemStack stack) {
-        return stack != null && stack.getItem() instanceof ItemSword;
+        sampler.reset();
     }
 
     private static void runOnClientThread(Runnable action) {
